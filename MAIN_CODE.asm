@@ -1,7 +1,6 @@
 ; ObjectFinder.asm
 ; Created by team Harambe and the Boiz
-; Team members: Randy Deng, Jeffrey Zhao,
-; Tejasvi Nareddy, Kavin Krishnan, Hope Hong
+; Team members: Randy Deng, Jeffrey Zhao, Tejasvi Nareddy, Kavin Krishnan, Hope Hong
 
 ;*************************************************
 ; Initialization
@@ -14,7 +13,7 @@ Init:
 	OUT    RVELCMD
 	OUT    SONAREN     ; Disable sonar (optional)
 	OUT    BEEP        ; Stop any beeping (optional)
-	
+
 	CALL   SetupI2C    ; Configure the I2C to read the battery voltage
 	CALL   BattCheck   ; Get battery voltage (and end if too low).
 	OUT    LCD         ; Display battery voltage (hex, tenths of volts)
@@ -31,7 +30,7 @@ WaitForSafety:
 	SHIFT  8           ; Shift over to LED17
 	OUT    XLEDS       ; LED17 blinks at 2.5Hz (10Hz/4)
 	JUMP   WaitForSafety
-	
+
 WaitForUser:
 	; This loop will wait for the user to press PB3, to ensure that
 	; they have a chance to prepare for any movement in the main code.
@@ -48,7 +47,7 @@ WaitForUser:
 	LOAD   Zero
 	OUT    XLEDS       ; clear LEDs once ready to continue
 
-	
+
 
 ;**************************************************
 ; User Constants and Values
@@ -189,7 +188,7 @@ DeadBatt:
 	OUT    XLEDS
 	CALL   Wait1       ; 1 second
 	JUMP   DeadBatt    ; repeat forever
-	
+
 ; Subroutine to read the A/D (battery voltage)
 ; Assumes that SetupI2C has been run
 GetBattLvl:
@@ -211,7 +210,7 @@ SetupI2C:
 	OUT    I2C_RDY     ; start the communication
 	CALL   BlockI2C    ; wait for it to finish
 	RETURN
-	
+
 ; Subroutine to block until I2C device is idle
 BlockI2C:
 	LOAD   Zero
