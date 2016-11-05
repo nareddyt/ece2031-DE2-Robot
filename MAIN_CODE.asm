@@ -48,19 +48,6 @@ WaitForUser:
 	OUT    XLEDS       ; clear LEDs once ready to continue
 
 
-
-;**************************************************
-; User Constants and Values
-; Additional constants are provided at the end of
-; the code, but they are values copied from the sample code
-;**************************************************
-; Robot Movement Parameters
-MaxSpeed:		DW 500;
-MidSpeed:		DW 300;
-SlowSpeed:		DW 100;
-
-
-
 ;**************************************************
 ; Main Code
 ;**************************************************
@@ -68,12 +55,13 @@ SlowSpeed:		DW 100;
 ; If necessary, put any initialization
 ; data for main here
 Main:
+	; TODO
 
 ; Main loop to search begins here
 MainLoop:
 	; Start initial XY search
 	CALL InitialSearch
-
+	; TODO
 
 ;**************************************************
 ; Important Subroutines
@@ -81,58 +69,28 @@ MainLoop:
 
 ; Initial search along walls
 InitialSearch:
-	; ENTER CODE HERE @ TEJU AND KAVIN
+	; TODO ENTER CODE HERE @ TEJU AND KAVIN
 	RETURN
 
 ; Return home after tagging
 GoHome:
-	; ENTER CODE HERE
+	; TODO ENTER CODE HERE
 	RETURN
 
 ; Tag object
 Tag:
-	; ENTER CODE HERE
+	; TODO ENTER CODE HERE
 	RETURN
 
 ; Update Occupancy Grid Map
 UpdateMap:
-	; ENTER CODE HERE
+	; TODO ENTER CODE HERE
 	RETURN
 
-;**************************************************
-; Helper Subroutines
-;**************************************************
-; Short Beep
-ShortBeep:
-	STORE	TempVal
-	LOADI 	4
-	OUT		BEEP
-	LOADI	1
-	STORE	WaitTimer
-	OUT		Timer
-BeepLoop:
-	IN 		Timer
-	SUB 	WaitTime
-	JNEG	BeepLoop
-	LOADI	0
-	OUT		BEEP
-	LOAD 	TempVal
-	RETURN
-	WaitTime:	DW 0
-
-; Turn 90 degrees counter clockwise
-Turn90cc:
-
-; Turn 90 degrees clockwise
-Turn90cw:
-
-; Turn 180 degrees
-Turn180:
-
-Die:
 ; Sometimes it's useful to permanently stop execution.
 ; This will also catch the execution if it accidentally
 ; falls through from above.
+Die:
 	LOAD   Zero         ; Stop everything.
 	OUT    LVELCMD
 	OUT    RVELCMD
@@ -142,10 +100,41 @@ Die:
 Forever:
 	JUMP   Forever      ; Do this forever.
 	DEAD:  DW &HDEAD    ; Example of a "local" variable
+	
+;**************************************************
+; Helper Subroutines
+;**************************************************
 
-;***************************************************************
-;* Subroutines
-;***************************************************************
+ShortBeep:
+	STORE	Temp
+	LOADI 	4
+	OUT		BEEP
+	LOADI	1
+	STORE	WaitTime
+	OUT		Timer
+BeepLoop:
+	IN 		Timer
+	SUB 	WaitTime
+	JNEG	BeepLoop
+	LOADI	0
+	OUT		BEEP
+	LOAD 	Temp
+	RETURN
+
+; Turn 90 degrees counter clockwise
+Turn90cc:
+	; TODO
+	RETURN
+
+; Turn 90 degrees clockwise
+Turn90cw:
+	; TODO
+	RETURN
+
+; Turn 180 degrees
+Turn180:
+	; TODO
+	RETURN
 
 ; Subroutine to wait (block) for 1 second
 Wait1:
@@ -157,6 +146,37 @@ Wloop:
 	JNEG   Wloop
 	RETURN
 
+; Subroutine to configure the I2C for reading batt voltage
+; Only needs to be done once after each reset.
+SetupI2C:
+	CALL   BlockI2C    ; wait for idle
+	LOAD   I2CWCmd     ; 0x1190 (write 1B, read 1B, addr 0x90)
+	OUT    I2C_CMD     ; to I2C_CMD register
+	LOAD   Zero        ; 0x0000 (A/D port 0, no increment)
+	OUT    I2C_DATA    ; to I2C_DATA register
+	OUT    I2C_RDY     ; start the communication
+	CALL   BlockI2C    ; wait for it to finish
+	RETURN
+	
+; Subroutine to block until I2C device is idle
+BlockI2C:
+	LOAD   Zero
+	STORE  Temp        ; Used to check for timeout
+BI2CL:
+	LOAD   Temp
+	ADDI   1           ; this will result in ~0.1s timeout
+	STORE  Temp
+	JZERO  I2CError    ; Timeout occurred; error
+	IN     I2C_RDY     ; Read busy signal
+	JPOS   BI2CL       ; If not 0, try again
+	RETURN             ; Else return
+I2CError:
+	LOAD   Zero
+	ADDI   &H12C       ; "I2C"
+	OUT    SSEG1
+	OUT    SSEG2       ; display error message
+	JUMP   I2CError
+	
 ; This subroutine will get the battery voltage,
 ; and stop program execution if it is too low.
 ; SetupI2C must be executed prior to this.
@@ -167,6 +187,7 @@ BattCheck:
 	JNEG   DeadBatt
 	ADD    MinBatt     ; get original value back
 	RETURN
+
 ; If the battery is too low, we want to make
 ; sure that the user realizes it...
 DeadBatt:
@@ -199,41 +220,11 @@ GetBattLvl:
 	IN     I2C_DATA    ; get the returned data
 	RETURN
 
-; Subroutine to configure the I2C for reading batt voltage
-; Only needs to be done once after each reset.
-SetupI2C:
-	CALL   BlockI2C    ; wait for idle
-	LOAD   I2CWCmd     ; 0x1190 (write 1B, read 1B, addr 0x90)
-	OUT    I2C_CMD     ; to I2C_CMD register
-	LOAD   Zero        ; 0x0000 (A/D port 0, no increment)
-	OUT    I2C_DATA    ; to I2C_DATA register
-	OUT    I2C_RDY     ; start the communication
-	CALL   BlockI2C    ; wait for it to finish
-	RETURN
-
-; Subroutine to block until I2C device is idle
-BlockI2C:
-	LOAD   Zero
-	STORE  Temp        ; Used to check for timeout
-BI2CL:
-	LOAD   Temp
-	ADDI   1           ; this will result in ~0.1s timeout
-	STORE  Temp
-	JZERO  I2CError    ; Timeout occurred; error
-	IN     I2C_RDY     ; Read busy signal
-	JPOS   BI2CL       ; If not 0, try again
-	RETURN             ; Else return
-I2CError:
-	LOAD   Zero
-	ADDI   &H12C       ; "I2C"
-	OUT    SSEG1
-	OUT    SSEG2       ; display error message
-	JUMP   I2CError
-
 ;***************************************************************
 ;* Variables
 ;***************************************************************
-Temp:     DW 0 ; "Temp" is not a great name, but can be useful
+Temp:		DW 0 ; "Temp" is not a great name, but can be useful
+WaitTime:	DW 0
 
 ;***************************************************************
 ;* Constants
