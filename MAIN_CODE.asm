@@ -1,5 +1,5 @@
 ; ObjectFinder.asm
-; Created by team Harambe and the Boiz
+; Created by team HARAMBE and the BOIZ
 ; Team members: Randy Deng, Jeffrey Zhao, Tejasvi Nareddy, Kavin Krishnan, Hope Hong
 
 ;*************************************************
@@ -100,7 +100,7 @@ Die:
 Forever:
 	JUMP   Forever      ; Do this forever.
 	DEAD:  DW &HDEAD    ; Example of a "local" variable
-	
+
 ;**************************************************
 ; Helper Subroutines
 ;**************************************************
@@ -157,7 +157,7 @@ SetupI2C:
 	OUT    I2C_RDY     ; start the communication
 	CALL   BlockI2C    ; wait for it to finish
 	RETURN
-	
+
 ; Subroutine to block until I2C device is idle
 BlockI2C:
 	LOAD   Zero
@@ -176,7 +176,7 @@ I2CError:
 	OUT    SSEG1
 	OUT    SSEG2       ; display error message
 	JUMP   I2CError
-	
+
 ; This subroutine will get the battery voltage,
 ; and stop program execution if it is too low.
 ; SetupI2C must be executed prior to this.
