@@ -95,6 +95,11 @@ Tag:
 	; ENTER CODE HERE
 	RETURN
 
+; Update Occupancy Grid Map
+UpdateMap:
+	; ENTER CODE HERE
+	RETURN
+
 ;**************************************************
 ; Helper Subroutines
 ;**************************************************
