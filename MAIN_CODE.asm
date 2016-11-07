@@ -1,4 +1,4 @@
-; ObjectFinder.asm
+; MAIN_CODE.asm
 ; Created by team Harambe and the Boiz
 ; Team members: Randy Deng, Jeffrey Zhao, Tejasvi Nareddy, Kavin Krishnan, Hope Hong
 
@@ -55,12 +55,16 @@ WaitForUser:
 ; If necessary, put any initialization
 ; data for main here
 Main:
+	OUT 	RESETPOS	; reset odometer in case wheels move after programming
+	Angle: 	DW 0
 	; TODO
 
 ; Main loop to search begins here
 MainLoop:
+	; Test code for object tagging
+	; CALL	TestTag
 	; Start initial XY search
-	CALL InitialSearch
+	; CALL InitialSearch
 	; TODO
 
 ;**************************************************
@@ -86,6 +90,35 @@ Tag:
 UpdateMap:
 	; TODO ENTER CODE HERE
 	RETURN
+
+; Test Object Tagging
+TestTag:
+	LOAD 	MASK4
+	OUT 	SONAREN
+	IN 		DIST4
+	ADDI	-610 ;2 feet
+	JNEG 	Tag1
+
+	LOAD 	MASK1
+	OUT 	SONAREN
+	IN 		DIST1
+	ADDI	-610 ;2 feet
+	JNEG 	Tag2
+
+	LOAD 	FMid
+	OUT 	LVELCMD
+	OUT 	RVELCMD
+	JUMP 	TestTag
+Tag1:
+	LOADI 	-44
+	STORE 	Angle
+	CALL 	Rotate
+	CALL 	Die
+Tag2:
+	LOADI 	44
+	STORE 	Angle
+	CALL 	Rotate
+	CALL 	Die
 
 ; Sometimes it's useful to permanently stop execution.
 ; This will also catch the execution if it accidentally
@@ -121,20 +154,55 @@ BeepLoop:
 	LOAD 	Temp
 	RETURN
 
-; Turn 90 degrees counter clockwise
-Turn90cc:
-	; TODO
+; Mod360 (keep angle between 0 and 359)
+Mod360:
+	JNEG	M360N
+	ADDI 	-360
+	JUMP 	Mod360
+M360N:
+	ADDI 	360
+	JNEG 	M360N
 	RETURN
 
-; Turn 90 degrees clockwise
-Turn90cw:
-	; TODO
-	RETURN
+; Turn X degrees
+Rotate:
+; Store AC in Temp
+	STORE	Temp
+; Calculate Threshold Values
+	IN 		THETA
+	ADD 	Angle
+	SUB 	ErrMargin
+	CALL 	Mod360
+	STORE 	LowErr
 
-; Turn 180 degrees
-Turn180:
-	; TODO
+	IN 		THETA
+	ADD 	ANGLE
+	ADD 	ErrMargin
+	CALL 	Mod360
+	STORE 	HighErr
+; Rotate CounterClock
+RotateCont:
+	LOAD 	FSlow
+	OUT		RVELCMD
+	LOAD 	RSlow
+	OUT		LVELCMD
+; Check if Theta is correct
+	IN 		THETA
+	SUB 	HighErr
+	JPOS	RotateCont
+	IN 		THETA
+	SUB  	LowErr
+	JNEG	RotateCont
+; Stop movement and return
+	LOAD 	ZERO
+	OUT 	LVELCMD
+	OUT 	RVELCMD
+	LOAD 	Temp
 	RETURN
+; Error margin variables
+LowErr: DW 0
+HighErr: DW 0
+ErrMargin: DW 4
 
 ; Subroutine to wait (block) for 1 second
 Wait1:
