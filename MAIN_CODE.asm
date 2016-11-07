@@ -84,17 +84,21 @@ InitialSearch:
 	; Reset odometer in case wheels move after programming
 	OUT 	RESETPOS	
 
-; Go forward until we are 11 feet away or about to hit an object	
+; Go forward until we are 11 feet away	
 KeepGoingForward:
+
+	; Update the map with the current sensor readings
+	CALL 	UpdateMap
 	
 	; Read in the current X position
 	IN		XPOS
-	; Check if it has gone too far
+	; Check if it has gone too far (x > maxX)
 	SUB		MaxX
 	JPOS	DoneForward
 	
 	; TODO Check if we are about to hit an object with the ultrasonic sensors
 	; TODO don't read directly from the sensors? Read from occupancy map?
+	; TODO interrupts instead of checking at each loop?
 	
 	; Keep going forward
 	; TODO tweak the speeds
@@ -105,13 +109,42 @@ KeepGoingForward:
 	; Keep looping
 	JUMP	KeepGoingForward
 	
-	
+; We are 11 feet away from home in the x direction now
 DoneForward:
 	; Stop the wheels
 	LOAD	ZERO
 	OUT		LVELCMD
 	OUT		RVELCMD
+	
+	; Rotate 180
+	LOAD	Deg180
+	CALL	Rotate
+
+; Go forward until we are at home
+GoBackHome:
+	; Update the map with the current sensor readings
+	CALL 	UpdateMap
+	
+	; Read in the current X position
+	IN		XPOS
+	; Check if it has gone too far (x < 0)
+	JNEG	BackAtHome
+	
+	; TODO Check if we are about to hit an object with the ultrasonic sensors
+	; TODO don't read directly from the sensors? Read from occupancy map?
+	; TODO interrupts instead of checking at each loop?
+	
+	; Keep going forward
+	; TODO tweak the speeds
+	LOAD	FMID
+	OUT		LVELCMD
+	OUT		RVELCMD
+	
+	; Keep looping
+	JUMP	GoBackHome
 		
+; We are back at home now
+BackAtHome:
 	RETURN
 
 ; Return home after tagging
