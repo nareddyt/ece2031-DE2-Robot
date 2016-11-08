@@ -56,7 +56,6 @@ WaitForUser:
 ; data for main here
 Main:
 	OUT 	RESETPOS	; reset odometer in case wheels move after programming
-	Angle: 	DW 0
 	; TODO
 
 ; Main loop to search begins here
@@ -154,7 +153,30 @@ GoHome:
 
 ; Tag object
 Tag:
-	; TODO ENTER CODE HERE
+	STORE 	Temp
+TagIt:
+	LOAD 	FMid
+	OUT 	LVELCMD
+	OUT 	RVELCMD
+	LOAD 	MASK2
+	OR 		MASK3
+	OUT 	SONAREN
+	IN 		DIST2
+	ADDI	-310
+	JNEG 	TagHit
+	
+	IN 		DIST3
+	ADDI 	-310
+	JNEG 	TagHit
+	
+	JUMP 	TagIt
+	
+; Tag/Hit object
+TagHit:
+	JUMP 	Die
+    LOAD 	FSlow
+	LOAD 	Temp ; TODO
+	JUMP 	TagHit
 	RETURN
 
 ; Update Occupancy Grid Map
@@ -165,13 +187,12 @@ UpdateMap:
 ; Test Object Tagging
 TestTag:
 	LOAD 	MASK4
+	OR 		MASK1
 	OUT 	SONAREN
+	
 	IN 		DIST4
 	ADDI	-610 ;2 feet
 	JNEG 	Tag1
-
-	LOAD 	MASK1
-	OUT 	SONAREN
 	IN 		DIST1
 	ADDI	-610 ;2 feet
 	JNEG 	Tag2
@@ -181,14 +202,16 @@ TestTag:
 	OUT 	RVELCMD
 	JUMP 	TestTag
 Tag1:
-	LOADI 	-44
+	LOADI 	-40
 	STORE 	Angle
 	CALL 	Rotate
+	CALL 	Tag
 	CALL 	Die
 Tag2:
-	LOADI 	44
+	LOADI 	40
 	STORE 	Angle
 	CALL 	Rotate
+	CALL 	Tag
 	CALL 	Die
 
 ; Sometimes it's useful to permanently stop execution.
@@ -211,7 +234,7 @@ Forever:
 
 ShortBeep:
 	STORE	Temp
-	LOADI 	4
+	LOADI 	2
 	OUT		BEEP
 	LOADI	1
 	STORE	WaitTime
@@ -235,9 +258,8 @@ M360N:
 	JNEG 	M360N
 	RETURN
 
-; Turn X degrees
+; Rotate X degrees
 Rotate:
-; Store AC in Temp
 	STORE	Temp
 ; Calculate Threshold Values
 	IN 		THETA
@@ -247,12 +269,15 @@ Rotate:
 	STORE 	LowErr
 
 	IN 		THETA
-	ADD 	ANGLE
+	ADD 	Angle
 	ADD 	ErrMargin
 	CALL 	Mod360
 	STORE 	HighErr
+; Check rotation direction
+	LOAD 	Angle
+	JNEG 	RotateCW ; else RotateCC
 ; Rotate CounterClock
-RotateCont:
+RotateCC:
 	LOAD 	FSlow
 	OUT		RVELCMD
 	LOAD 	RSlow
@@ -260,20 +285,30 @@ RotateCont:
 ; Check if Theta is correct
 	IN 		THETA
 	SUB 	HighErr
-	JPOS	RotateCont
+	JPOS	RotateCC
 	IN 		THETA
 	SUB  	LowErr
-	JNEG	RotateCont
+	JNEG	RotateCC
+	JUMP 	RotateEnd
+RotateCW:
+	LOAD 	RSlow
+	OUT		RVELCMD
+	LOAD 	FSlow
+	OUT		LVELCMD
+; Check if Theta is correct
+	IN 		THETA
+	SUB 	HighErr
+	JPOS	RotateCW
+	IN 		THETA
+	SUB  	LowErr
+	JNEG	RotateCW
+RotateEnd:
 ; Stop movement and return
 	LOAD 	ZERO
 	OUT 	LVELCMD
 	OUT 	RVELCMD
 	LOAD 	Temp
 	RETURN
-; Error margin variables
-LowErr: DW 0
-HighErr: DW 0
-ErrMargin: DW 4
 
 ; Subroutine to wait (block) for 1 second
 Wait1:
@@ -364,6 +399,10 @@ GetBattLvl:
 ;***************************************************************
 Temp:		DW 0 ; "Temp" is not a great name, but can be useful
 WaitTime:	DW 0
+Angle: 		DW 0 ; Used in Rotate function
+LowErr: 	DW 0 ; Error margin variables
+HighErr: 	DW 0 ; Used in Rotate function
+ErrMargin: 	DW 4
 
 ;***************************************************************
 ;* Constants
