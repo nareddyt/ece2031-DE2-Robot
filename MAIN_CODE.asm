@@ -398,6 +398,8 @@ FMid:     DW 350       ; 350 is a medium speed
 RMid:     DW -350
 FFast:    DW 500       ; 500 is almost max speed (511 is max)
 RFast:    DW -500
+MaxX:	  DW 3200	   	; 11 feet = 3200 X increments
+MinX:	  DW 0			; 0 feet = 0 X increments
 
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
 I2CWCmd:  DW &H1190    ; write one i2c byte, read one byte, addr 0x90
