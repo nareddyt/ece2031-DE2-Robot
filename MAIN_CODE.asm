@@ -1,5 +1,5 @@
 ; MAIN_CODE.asm
-; Created by team Harambe and the Boiz
+; Created by team HARAMBE and the BOIZ
 ; Team members: Randy Deng, Jeffrey Zhao, Tejasvi Nareddy, Kavin Krishnan, Hope Hong
 
 ;*************************************************
@@ -73,78 +73,66 @@ MainLoop:
 ; Initial search along walls
 InitialSearch:
 	; TODO ENTER CODE HERE @ TEJU AND KAVIN
-	
-	; Enable sonar sensors 2 and 3
-	; TODO do this with interrupts instead of just checking every loop cycle
-	LOAD	MASK2
-	ADD		MASK3
-	OUT 	SONAREN
-	
-	; Reset odometer in case wheels move after programming
-	OUT 	RESETPOS	
-
-; Go forward until we are 11 feet away	
-KeepGoingForward:
-
-	; Update the map with the current sensor readings
+	;Updates map with current readings
 	CALL 	UpdateMap
-	
-	; Read in the current X position
-	IN		XPOS
-	; Check if it has gone too far (x > maxX)
-	SUB		MaxX
-	JPOS	DoneForward
-	
-	; TODO Check if we are about to hit an object with the ultrasonic sensors
-	; TODO don't read directly from the sensors? Read from occupancy map?
-	; TODO interrupts instead of checking at each loop?
-	
-	; Keep going forward
-	; TODO tweak the speeds
-	LOAD	FMID
-	OUT		LVELCMD
-	OUT		RVELCMD
-	
-	; Keep looping
-	JUMP	KeepGoingForward
-	
-; We are 11 feet away from home in the x direction now
-DoneForward:
-	; Stop the wheels
-	LOAD	ZERO
-	OUT		LVELCMD
-	OUT		RVELCMD
-	
-	; Rotate 180
-	LOAD	Deg180
-	CALL	Rotate
 
-; Go forward until we are at home
-GoBackHome:
-	; Update the map with the current sensor readings
-	CALL 	UpdateMap
-	
-	; Read in the current X position
-	IN		XPOS
-	; Check if it has gone too far (x < 0)
-	JNEG	BackAtHome
-	
-	; TODO Check if we are about to hit an object with the ultrasonic sensors
-	; TODO don't read directly from the sensors? Read from occupancy map?
-	; TODO interrupts instead of checking at each loop?
-	
-	; Keep going forward
-	; TODO tweak the speeds
-	LOAD	FMID
-	OUT		LVELCMD
-	OUT		RVELCMD
-	
-	; Keep looping
-	JUMP	GoBackHome
-		
-; We are back at home now
-BackAtHome:
+	;Checks to see if current edge needs X or Y Pos
+	LOAD	UseX
+	JZERO	LoadY
+	LOAD	XPOS
+	JUMP	CheckEdge
+
+	;Edges 2 and 4 need to load the Y Pos
+	LoadY:
+	LOAD	YPOS
+
+	;For edges 3 and 4, only need to check if dist (x or y) is 0
+	CheckEdge:
+	STORE Dist	;Stores the X or Y pos needed to check distance traveled
+	LOAD Edge
+	ADDI -3
+	JNEG Check12
+
+	;For edges 3 and 4, only need to check if dist (x or y) is 0
+	Check0:
+	LOAD	Dist
+	JZERO turn
+	JUMP	MoveForward
+
+	;For edges 1 and 2, checks if dist is 11 feet
+	Check12:
+	LOAD 	Dist
+	CALL 	subConvertAccToFeet
+	ADDI 	-11
+	JPOS 	nextEdge
+	JZERO nextEdge
+
+	;Moves robot forward if all conditions met
+	MoveForward:
+	LOAD 	FMid
+	OUT 	LVELCMD
+	OUT 	RVELCMS
+	JUMP 	InitialSearch
+
+	;Rotates robot 90 degrees ccw if all edges not visited
+  Turn:
+	LOAD	Edge
+	ADDI	-4
+	JZERO	Done			;Checks if all edges visited
+	ADDI	5					;Cummatively does Edge + 1 because we already subtracted 4
+	NOT		UseX			;Changes which pos value to check for next edge in boolean UseX
+	STORE UseX
+
+	LOADI	90
+	STORE	angle
+	CALL	rotateCont
+
+	Done:
 	RETURN
+
+UseX:			DW	H&01
+Edge:			DW 	H&01
+Dist:			DW	0
 
 ; Return home after tagging
 GoHome:
@@ -227,7 +215,7 @@ Die:
 Forever:
 	JUMP   Forever      ; Do this forever.
 	DEAD:  DW &HDEAD    ; Example of a "local" variable
-	
+
 ;**************************************************
 ; Helper Subroutines
 ;**************************************************
@@ -331,7 +319,7 @@ SetupI2C:
 	OUT    I2C_RDY     ; start the communication
 	CALL   BlockI2C    ; wait for it to finish
 	RETURN
-	
+
 ; Subroutine to block until I2C device is idle
 BlockI2C:
 	LOAD   Zero
@@ -350,7 +338,7 @@ I2CError:
 	OUT    SSEG1
 	OUT    SSEG2       ; display error message
 	JUMP   I2CError
-	
+
 ; This subroutine will get the battery voltage,
 ; and stop program execution if it is too low.
 ; SetupI2C must be executed prior to this.
