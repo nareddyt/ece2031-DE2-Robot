@@ -89,7 +89,7 @@ InitializeVars:
 InitialSearch:
 	; TODO change code based on 2 vars
 	
-	; Enable sonar sensors 2 and 3
+	; Enable sonar sensors 2 and 3 to make sure we don't run into anything
 	; TODO do this with interrupts instead of just checking every loop cycle
 	LOAD	MASK2
 	ADD		MASK3
@@ -106,8 +106,8 @@ KeepGoingForward:
 	
 	; Read in the current X position
 	IN		XPOS
-	; Check if it has gone too far (x > maxX)
-	SUB		MaxX
+	; Check if it has gone too far (x > maxPos)
+	SUB		MaxLong
 	JPOS	DoneForward
 	
 	; TODO Check if we are about to hit an object with the ultrasonic sensors
@@ -197,6 +197,7 @@ TagHit:
 ; Update Occupancy Grid Map
 UpdateMap:
 	; TODO ENTER CODE HERE
+	; TODO make sure to enable the correct sensor based on ObjectsPosTheta. Ask Teju about it...
 	RETURN
 
 ; Test Object Tagging
@@ -426,8 +427,8 @@ Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
 ErrMargin: 			DW 4
-ObjectWallDist:		DW 0 	; How far the robot has to travel along the wall to get to the object
-ObjectPerpDist:		DW 0	; How far the object is from the wall
+ObjectWallDist:		DW 0 	; The x position of the next closest object
+ObjectPerpDist:		DW 0	; The absolute value of the y position of the next closest object
 AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
 ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a positive angle to tag objects
 
@@ -477,8 +478,8 @@ FMid:     DW 350       ; 350 is a medium speed
 RMid:     DW -350
 FFast:    DW 500       ; 500 is almost max speed (511 is max)
 RFast:    DW -500
-MaxX:	  DW 3200	   	; 11 feet = 3200 X increments
-MinX:	  DW 0			; 0 feet = 0 X increments
+MaxLong:	DW 2900	   	; 12 ft - 2ft (for home and robot) = 10ft = 3048 mm =~ 2900 increments in position
+MaxShort:	DW 1740		; 8ft - 2ft (for home and robot) = 6ft = 1740 mm =~ 1740 increments in position
 
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
 I2CWCmd:  DW &H1190    ; write one i2c byte, read one byte, addr 0x90

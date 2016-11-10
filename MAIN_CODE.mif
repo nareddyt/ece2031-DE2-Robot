@@ -52,7 +52,7 @@ CONTENT
            027 : 98C3;  -- 	OUT 	RESETPOS	
            028 : 8051;  -- 	CALL 	UpdateMap
            029 : 90C0;  -- 	IN		XPOS
-           02A : 2116;  -- 	SUB		MaxX
+           02A : 2116;  -- 	SUB		MaxLong
            02B : 3830;  -- 	JPOS	DoneForward
            02C : 0912;  -- 	LOAD	FMID
            02D : 9883;  -- 	OUT		LVELCMD
@@ -249,8 +249,8 @@ CONTENT
            0EC : 0000;  -- LowErr: 			DW 0 ; Error margin variables
            0ED : 0000;  -- HighErr: 			DW 0 ; Used in Rotate function
            0EE : 0004;  -- ErrMargin: 			DW 4
-           0EF : 0000;  -- ObjectWallDist:		DW 0 	; How far the robot has to travel along the wall to get to the object
-           0F0 : 0000;  -- ObjectPerpDist:		DW 0	; How far the object is from the wall
+           0EF : 0000;  -- ObjectWallDist:		DW 0 	; The x position of the next closest object
+           0F0 : 0000;  -- ObjectPerpDist:		DW 0	; The absolute value of the y position of the next closest object
            0F1 : 0000;  -- AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
            0F2 : 0000;  -- ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a positive angle to tag objects
            0F3 : FFFF;  -- NegOne:   DW -1
@@ -288,8 +288,8 @@ CONTENT
            113 : FEA2;  -- RMid:     DW -350
            114 : 01F4;  -- FFast:    DW 500       ; 500 is almost max speed (511 is max)
            115 : FE0C;  -- RFast:    DW -500
-           116 : 0C80;  -- MaxX:	  DW 3200	   	; 11 feet = 3200 X increments
-           117 : 0000;  -- MinX:	  DW 0			; 0 feet = 0 X increments
+           116 : 0B54;  -- MaxLong:	DW 2900	   	; 12 ft - 2ft (for home and robot) = 10ft = 3048 mm =~ 2900 increments in position
+           117 : 06CC;  -- MaxShort:	DW 1740		; 8ft - 2ft (for home and robot) = 6ft = 1740 mm =~ 1740 increments in position
            118 : 008C;  -- MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
            119 : 1190;  -- I2CWCmd:  DW &H1190    ; write one i2c byte, read one byte, addr 0x90
            11A : 0190;  -- I2CRCmd:  DW &H0190    ; write nothing, read one byte, addr 0x90
