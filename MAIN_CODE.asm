@@ -61,6 +61,7 @@ Main:
 ; Main loop to search begins here
 MainLoop:
 	; Test code for object tagging
+	; Read in switch data and initialize vars
 	; CALL	TestTag
 	; Start initial XY search
 	; CALL InitialSearch
@@ -70,9 +71,23 @@ MainLoop:
 ; Important Subroutines
 ;**************************************************
 
+InitializeVars:
+	; SW0 = AlongLongWall --> Sets var to 1 if the robot is travelling along the long wall
+	IN		SWITCHES
+	AND		MASK0
+	STORE 	AlongLongWall
+	
+	; SW1 = ObjectsPosTheta --> Sets var to 1 if the robot must turn in the positive direction to tag objects
+	IN		SWITCHES
+	AND		MASK1
+	STORE	ObjectsPosTheta
+	
+	; Return!
+	RETURN
+
 ; Initial search along walls
 InitialSearch:
-	; TODO ENTER CODE HERE @ TEJU AND KAVIN
+	; TODO change code based on 2 vars
 	
 	; Enable sonar sensors 2 and 3
 	; TODO do this with interrupts instead of just checking every loop cycle
@@ -213,6 +228,14 @@ Tag2:
 	CALL 	Rotate
 	CALL 	Tag
 	CALL 	Die
+	
+; Finds the closest object to the wall based on the map
+FindClosestObject:
+	LOAD	ZERO
+	STORE	ObjectWallDist
+	STORE	ObjectPerpDist
+	RETURN
+
 
 ; Sometimes it's useful to permanently stop execution.
 ; This will also catch the execution if it accidentally
@@ -397,12 +420,17 @@ GetBattLvl:
 ;***************************************************************
 ;* Variables
 ;***************************************************************
-Temp:		DW 0 ; "Temp" is not a great name, but can be useful
-WaitTime:	DW 0
-Angle: 		DW 0 ; Used in Rotate function
-LowErr: 	DW 0 ; Error margin variables
-HighErr: 	DW 0 ; Used in Rotate function
-ErrMargin: 	DW 4
+Temp:				DW 0 ; "Temp" is not a great name, but can be useful
+WaitTime:			DW 0
+Angle: 				DW 0 ; Used in Rotate function
+LowErr: 			DW 0 ; Error margin variables
+HighErr: 			DW 0 ; Used in Rotate function
+ErrMargin: 			DW 4
+ObjectWallDist:		DW 0 	; How far the robot has to travel along the wall to get to the object
+ObjectPerpDist:		DW 0	; How far the object is from the wall
+AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
+ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a positive angle to tag objects
+
 
 ;***************************************************************
 ;* Constants
