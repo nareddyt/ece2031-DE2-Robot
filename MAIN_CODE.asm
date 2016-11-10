@@ -62,11 +62,11 @@ Main:
 MainLoop:
 	CALL	InitializeVars
 	CALL	InitialSearch
-	
+
 	; TODO we need some way to keep track of the number of objects left
 	; while (numObjects > 0) { call FindAndTagClosestObject }
 	CALL	FindAndTagClosestObject
-	
+
 ;**************************************************
 ; Important Subroutines
 ;**************************************************
@@ -76,82 +76,82 @@ InitializeVars:
 	IN		SWITCHES
 	AND		MASK0
 	STORE 	AlongLongWall
-	
+
 	; SW1 = ObjectsPosTheta --> Sets var to 1 if the robot must turn in the positive direction to tag objects
 	IN		SWITCHES
 	AND		MASK1
 	STORE	ObjectsPosTheta
-	
+
 	; Reset odometer in case wheels move after initialization
 	OUT 	RESETPOS
-	
+
 	; Return!
 	RETURN
-	
+
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
 		; TODO change code based on 2 vars
-		
+
 		; Enable sonar sensors 2 and 3 to make sure we don't run into anything
 		; TODO do this with interrupts instead of just checking every loop cycle
 		LOAD	MASK2
 		ADD		MASK3
 		OUT 	SONAREN
-	
+
 	; Go forward until we are at the end of the edge
 	KeepGoingForward:
-	
+
 		; Update the map with the current sensor readings
 		; CALL Jeff's code here!
 		CALL 	UpdateMap
-		
+
 		; Check the robot has gone too far in the x direction
 		; Note that this distance depends on which wall we are following, stored in AlongLongWall
 		IN		AlongLongWall
 		JZERO	LoadShortDistance
-		
+
 	; We are travelling along the long edge, so check this distance bound
 	LoadLongDistance:
 		IN		XPOS
 		SUB		MaxLong
 		JUMP	DistanceCheck
-		
+
 	; We are travelling along the short edge, so check this distance bound
 	LoadShortDistance:
 		IN		XPOS
 		SUB		MaxShort
 		JUMP 	DistanceCheck
-		
+
 	DistanceCheck:
 		JPOS	DoneForward
-		
+
 		; TODO Check if we are about to hit an object with the ultrasonic sensors
 		; TODO interrupts instead of checking at each loop?
 		; CHECKME maybe we should aggregate this data as well?
-		
+
 		; Keep going forward as we have not hit the max limit for the wall
 		; FIXME tweak the speeds
 		LOAD	FMID
 		OUT		LVELCMD
 		OUT		RVELCMD
-		
+
 		; Keep looping
 		JUMP	KeepGoingForward
-		
+
 	; We are at the max bound of the wall now
 	DoneForward:
 		; Stop the wheels
 		LOAD	ZERO
 		OUT		LVELCMD
 		OUT		RVELCMD
-		
+
 		; Rotate 180 (direction doesn't matter)
 		LOAD	Deg180
 		CALL	Rotate
-		
+
 		; Return to main
 		RETURN
-	
+
 UpdateMap:
 	;Traverse an axis, but store the SMALLEST value read by sonar sensor and associate an XPOS with that location
  	LOAD 	AlongLongWall
@@ -162,7 +162,7 @@ UpdateMap:
 	 	LOAD	MASK0
 	 	OUT 	SONAREN
 	 	IN 		DIST0 ;Turn on and read value from sensor 0
-	 	SUB 	Cell ;subtract current value in cell 
+	 	SUB 	Cell ;subtract current value in cell
 	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
 	 	RETURN
 
@@ -170,7 +170,7 @@ UpdateMap:
 		LOAD	MASK5
 		OUT 	SONAREN
 		IN 		DIST5
-		SUB 	Cell ;subtract current value in cell 
+		SUB 	Cell ;subtract current value in cell
 	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
 		RETURN
 
@@ -189,66 +189,79 @@ UpdateMap:
 FindAndTagClosestObject:
 
 		; Call method to get information about the closest object
-		CALL	FindClosestObject	
+		CALL	FindClosestObject
 		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist
 		; TODO bounds check on the closest object (just in case?!?)
-		
-		; Figure out which direction to move in to get to the object (+/- x)
-		JUMP	CheckPositive
-	
-	; Check if we need to go in +x to get to the object
-	CheckPositive:
-		; Load our position
-		IN		XPOS
-		SUB		ObjectXDist
-		JPOS	CheckNegative
-		
-		; We want to go in +x
-		IN		FMID
-		STORE 	TagVelocity
-		JUMP	MoveTowardObject
-	
-	; Check if we need to go in -x to get to the object
-	CheckNegative:
-		; FIXME safe to do the check again here (?)
-		; We want to go in -x
-		IN		RMID
-		STORE 	TagVelocity
-		JUMP	MoveTowardObject
-	
+
 	; Go toward the object until we hit the y distance
 	MoveTowardObject:
-	
+
 		; Update the map with the current sensor readings
 		CALL 	UpdateMap
-		
-		; TODO bounds check
-		
-		; Keep going +/- as we have not hit the max limit for the wall
-		; FIXME tweak the speeds
-		LOAD	TagVelocity
+
+		; Do the bounds check
+		LOAD 	XPOS
+		SUB 	ObjectXDist
+		JNEG	GoUp
+		JZERO 	AtObjectX
+		JPOS	GoDown
+
+	GoUp:
+		LOAD 	ONE
+		STORE 	XDir
+		JUMP 	MoveLoop
+
+	GoDown:
+		LOAD 	ZERO
+		STORE 	XDir
+
+	MoveLoop:
+		CALL 	UpdateMap
+		LOAD XDir
+		JZERO CheckLess
+		JPOS CheckGreat
+
+	CheckGreat:
+		LOAD	XPOS
+		SUB		ObjectXDist
+		JZERO 	AtObjectX
+		JPOS	AtObjectX
+		JUMP	KeepGoing
+
+	CheckLess:
+		LOAD	XPOS
+		SUB		ObjectXDist
+		JZERO 	AtObjectX
+		JNEG	AtObjectX
+		JUMP	KeepGoing
+
+	KeepGoing:
+		LOAD	FMid
 		OUT		LVELCMD
 		OUT		RVELCMD
-		
-		; Keep looping
-		JUMP	MoveTowardObject
-		
+		JUMP	MoveLoop
+
 	AtObjectX:
 		; TODO turn for Randy's tagging
 		; TODO call Randy's tag method
 		; TODO return to home
-	
+
+		; Stop the robot
+		LOAD	ZERO
+		OUT		LVELCMD
+		OUT		RVELCMD
+
 		; Return to main
 		RETURN
-		
+
 ; Finds the closest object (relative to the wall) based on the map
 FindClosestObject:
-	; TODO
-	LOAD	ZERO
+	; TODO CHECKME
+	LOAD	CELL
 	STORE	ObjectXDist
 	STORE	ObjectYDist
 	RETURN
-		
+
 ; We are back at home now
 BackAtHome:
 	; TODO wait for user input to start again
@@ -267,13 +280,13 @@ TagIt:
 	IN 		DIST2
 	ADDI	-310
 	JNEG 	TagHit
-	
+
 	IN 		DIST3
 	ADDI 	-310
 	JNEG 	TagHit
-	
+
 	JUMP 	TagIt
-	
+
 ; Tag/Hit object
 TagHit:
 	JUMP 	Die
@@ -287,7 +300,7 @@ TestTag:
 	LOAD 	MASK4
 	OR 		MASK1
 	OUT 	SONAREN
-	
+
 	IN 		DIST4
 	ADDI	-610 ;2 feet
 	JNEG 	Tag1
@@ -323,12 +336,12 @@ Die:
 	OUT    SONAREN
 	LOAD   DEAD         ; An indication that we are dead
 	OUT    SSEG2        ; "dEAd" on the LEDs
-	
+
 	; Our version of HALT
 	Forever:
 		JUMP   Forever      ; Do this forever.
 		DEAD:  DW &HDEAD    ; Example of a "local" variable
-	
+
 ;**************************************************
 ; Helper Subroutines
 ;**************************************************
@@ -340,7 +353,7 @@ ShortBeep:
 	LOADI	1
 	STORE	WaitTime
 	OUT		Timer
-	
+
 	BeepLoop:
 		IN 		Timer
 		SUB 	WaitTime
@@ -355,7 +368,7 @@ Mod360:
 	JNEG	M360N
 	ADDI 	-360
 	JUMP 	Mod360
-	
+
 	M360N:
 		ADDI 	360
 		JNEG 	M360N
@@ -364,24 +377,24 @@ Mod360:
 ; Rotate X degrees
 Rotate:
 		STORE	Temp
-		
+
 		; Calculate Threshold Values
 		IN 		THETA
 		ADD 	Angle
 		SUB 	ErrMargin
 		CALL 	Mod360
 		STORE 	LowErr
-	
+
 		IN 		THETA
 		ADD 	Angle
 		ADD 	ErrMargin
 		CALL 	Mod360
 		STORE 	HighErr
-		
+
 		; Check rotation direction
 		LOAD 	Angle
 		JNEG 	RotateCW ; else RotateCC
-		
+
 	; Rotate CounterClock
 	RotateCC:
 		LOAD 	FSlow
@@ -396,7 +409,7 @@ Rotate:
 		SUB  	LowErr
 		JNEG	RotateCC
 		JUMP 	RotateEnd
-		
+
 	RotateCW:
 		LOAD 	RSlow
 		OUT		RVELCMD
@@ -409,7 +422,7 @@ Rotate:
 		IN 		THETA
 		SUB  	LowErr
 		JNEG	RotateCW
-		
+
 	RotateEnd:
 	; Stop movement and return
 		LOAD 	ZERO
@@ -439,7 +452,7 @@ SetupI2C:
 	OUT    I2C_RDY     ; start the communication
 	CALL   BlockI2C    ; wait for it to finish
 	RETURN
-	
+
 ; Subroutine to block until I2C device is idle
 BlockI2C:
 	LOAD   Zero
@@ -458,7 +471,7 @@ I2CError:
 	OUT    SSEG1
 	OUT    SSEG2       ; display error message
 	JUMP   I2CError
-	
+
 ; This subroutine will get the battery voltage,
 ; and stop program execution if it is too low.
 ; SetupI2C must be executed prior to this.
@@ -511,6 +524,7 @@ Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
 ErrMargin: 			DW 4
+XDir:						DW 0	; Direction on the X access robot is moving
 ObjectXDist:		DW 0 	; The x position of the next closest object
 ObjectYDist:		DW 0	; The absolute value of the y position of the next closest object
 AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
