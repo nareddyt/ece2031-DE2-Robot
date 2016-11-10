@@ -199,41 +199,43 @@ FindAndTagClosestObject:
 		; Update the map with the current sensor readings
 		CALL 	UpdateMap
 
+		; Do the bounds check
 		LOAD 	XPOS
 		SUB 	ObjectXDist
 		JNEG	GoUp
-		JZERO AtObjectX
+		JZERO 	AtObjectX
 		JPOS	GoDown
 
-		GoUp:
-		LOAD ONE
-		STORE XDir
-		JUMP MoveLoop
+	GoUp:
+		LOAD 	ONE
+		STORE 	XDir
+		JUMP 	MoveLoop
 
-		GoDown:
-		LOAD ZERO
-		STORE XDir
+	GoDown:
+		LOAD 	ZERO
+		STORE 	XDir
 
-		MoveLoop:
+	MoveLoop:
 		CALL 	UpdateMap
 		LOAD XDir
-		JZERO CheckLess:
+		JZERO CheckLess
+		JPOS CheckGreat
 
-		CheckGreat:
+	CheckGreat:
 		LOAD	XPOS
 		SUB		ObjectXDist
-		JZERO AtObjectX
+		JZERO 	AtObjectX
 		JPOS	AtObjectX
 		JUMP	KeepGoing
 
-		CheckLess:
+	CheckLess:
 		LOAD	XPOS
 		SUB		ObjectXDist
-		JZERO AtObjectX
+		JZERO 	AtObjectX
 		JNEG	AtObjectX
 		JUMP	KeepGoing
 
-		KeepGoing:
+	KeepGoing:
 		LOAD	FMid
 		OUT		LVELCMD
 		OUT		RVELCMD
@@ -244,13 +246,18 @@ FindAndTagClosestObject:
 		; TODO call Randy's tag method
 		; TODO return to home
 
+		; Stop the robot
+		LOAD	ZERO
+		OUT		LVELCMD
+		OUT		RVELCMD
+
 		; Return to main
 		RETURN
 
 ; Finds the closest object (relative to the wall) based on the map
 FindClosestObject:
-	; TODO
-	LOAD	ZERO
+	; TODO CHECKME
+	LOAD	CELL
 	STORE	ObjectXDist
 	STORE	ObjectYDist
 	RETURN
