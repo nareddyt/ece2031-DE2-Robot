@@ -99,10 +99,54 @@ InitialSearch:
 		OUT 	SONAREN
 	
 	; Go forward until we are at the end of the edge
-	KeepGoingForward:
+	; TODO Check if we are about to hit an object with the ultrasonic sensors
+	; TODO interrupts instead of checking at each loop?
 	
-		; Update the map with the current sensor readings
-		CALL 	UpdateMap
+	; Keep going forward
+	; TODO tweak the speeds
+	LOAD	FMID
+	OUT		LVELCMD
+	OUT		RVELCMD
+	
+UpdateMap:
+	;Traverse an axis, but store the SMALLEST value read by sonar sensor and associate an XPOS with that location
+ 	LOAD 	AlongLongWall
+	JPOS 	LGO ;If no switches active, robot setup values for long axis traverse
+	JZERO  	SGO ;If SW0 active, robot setup values for short axis traverse
+
+	; Check if it has gone too far 
+DistanceCheck:
+	LOAD 	AlongLongWall
+	JPOS 	LoadLongDistance
+	JZERO 	LoadShortDistance
+	JNEG	UpdateMap
+	JPOS	DoneForward
+	JZERO	DoneForward
+
+
+	LGO:
+	 	LOAD	MASK0
+	 	OUT 	SONAREN
+	 	IN 		DIST0 ;Turn on and read value from sensor 0
+	 	SUB 	Cell ;subtract current value in cell 
+	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
+	 	RETURN
+
+	SGO:
+		LOAD	MASK5
+		OUT 	SONAREN
+		IN 		DIST5
+		SUB 	Cell ;subtract current value in cell 
+	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
+		RETURN
+
+	CellIn:
+		; Add back the value of cell and store the dist measurement into cell
+		ADD Cell
+		STORE Cell
+		IN XPOS
+		STORE ObjLoc
+		Return
 		
 		; Check the robot has gone too far in the x direction
 		; Note that this distance depends on which wall we are following, stored in AlongLongWall
@@ -113,29 +157,14 @@ InitialSearch:
 	LoadLongDistance:
 		IN		XPOS
 		SUB		MaxLong
-		JUMP	DistanceCheck
+		RETURN
 		
 	; We are travelling along the short edge, so check this distance bound
 	LoadShortDistance:
 		IN		XPOS
 		SUB		MaxShort
-		JUMP 	DistanceCheck
+		RETURN
 		
-	DistanceCheck:
-		JPOS	DoneForward
-		
-		; TODO Check if we are about to hit an object with the ultrasonic sensors
-		; TODO interrupts instead of checking at each loop?
-		; CHECKME maybe we should aggregate this data as well?
-		
-		; Keep going forward as we have not hit the max limit for the wall
-		; FIXME tweak the speeds
-		LOAD	FMID
-		OUT		LVELCMD
-		OUT		RVELCMD
-		
-		; Keep looping
-		JUMP	KeepGoingForward
 		
 	; We are at the max bound of the wall now
 	DoneForward:
@@ -150,12 +179,6 @@ InitialSearch:
 		
 		; Return to main
 		RETURN
-		
-; Update Occupancy Grid Map
-UpdateMap:
-	; TODO ENTER CODE HERE
-	; TODO make sure to enable the correct sensor based on ObjectsPosTheta. Ask Teju about it...
-	RETURN
 
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
@@ -190,7 +213,7 @@ FindAndTagClosestObject:
 		STORE 	TagVelocity
 		JUMP	MoveTowardObject
 	
-	; Go toward the object until we hit the x distance
+	; Go toward the object until we hit the y distance
 	MoveTowardObject:
 	
 		; Update the map with the current sensor readings
@@ -490,6 +513,8 @@ ObjectYDist:		DW 0	; The absolute value of the y position of the next closest ob
 AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
 ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a positive angle to tag objects
 TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
+Cell: 				DW &H7FFF	; Initialize cell value
+ObjLoc:				DW 0	 	; Stores the location of the object to be tagged
 
 
 ;***************************************************************
@@ -537,7 +562,7 @@ FMid:     DW 350       ; 350 is a medium speed
 RMid:     DW -350
 FFast:    DW 500       ; 500 is almost max speed (511 is max)
 RFast:    DW -500
-MaxLong:	DW 2900	   	; 12 ft - 2ft (for home and robot) = 10ft = 3048 mm =~ 2900 increments in position
+MaxLong:	DW 2931	   	; 12 ft - 2ft (for home and robot) = 10ft = 3048 mm =~ 2900 increments in position
 MaxShort:	DW 1740		; 8ft - 2ft (for home and robot) = 6ft = 1740 mm =~ 1740 increments in position
 
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
