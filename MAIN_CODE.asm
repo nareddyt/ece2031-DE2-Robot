@@ -254,6 +254,70 @@ FindAndTagClosestObject:
 		; Return to main
 		RETURN
 
+
+;Goes to middle and searches for object to go towards
+Middle:			DW 2090
+GoToMiddleSearch:
+
+	;Check if robot is at middle yet
+	CheckIfMiddle:
+		CALL 	UpdateMap
+		LOAD 	XPOS
+		ADD 	-2090
+		JNEG 	NotAtMiddle
+		JUMP 	AtMiddle
+
+	;Robot Moves Forward if Not at middle yet
+	NotAtMiddle:
+		LOAD	FMid
+		OUT		LVELCMD
+		OUT		RVELCMD
+		JUMP  CheckIfMiddle
+
+;Deals with robot rotation at middle position
+AtMiddle:
+	LOAD	ZERO
+	OUT		LVELCMD
+	OUT		RVELCMD
+
+	LOAD	MASK2
+	OUT		SONAREN
+	LOAD	MASK3
+	OUT		SONAREN
+
+	;Check if sensor 2 detects an Object
+	CheckMidObj:
+		CALL 	UpdateMap
+		LOAD	DIST2
+		ADDI	-915
+		JNEG	TwoGot
+		JUMP	Rotate10
+
+	;Given sensor 2 found an object, Check if sensor 3 detects an Object
+	TwoGot:
+		LOAD	ONE
+		LOAD	DIST3
+		ADDI	-915
+		JNEG	ThreeGot
+		JUMP	Rotate10
+
+	;Given sensor 2 and 3 found an object, handle remaining action
+	ThreeGot:
+		LOAD	ZERO
+		OUT		LVELCMD
+		OUT		RVELCMD
+		;Temporarily
+		JUMP	ThreeGot
+
+	;Rotates 12 degrees if object was not in front of object based on s2 and s3
+	Rotate10:
+		LOAD 	ZERO
+		ADDI 	12
+		STORE Angle
+		JUMP	Rotate
+		JUMP	CheckMidObj
+
+
 ; Finds the closest object (relative to the wall) based on the map
 FindClosestObject:
 	; TODO CHECKME
