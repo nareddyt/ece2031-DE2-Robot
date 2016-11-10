@@ -95,27 +95,41 @@ InitialSearch:
 	ADD		MASK3
 	OUT 	SONAREN
 	
-	; Reset odometer in case wheels move after programming
-	OUT 	RESETPOS	
+	; Reset odometer in case wheels move after initialization
+	OUT 	RESETPOS
 
-; Go forward until we are 11 feet away	
+; Go forward until we are at the end of the edge
 KeepGoingForward:
 
 	; Update the map with the current sensor readings
 	CALL 	UpdateMap
 	
-	; Read in the current X position
+	; Check the robot has gone too far in the x direction
+	; Note that this distance depends on which wall we are following, stored in AlongLongWall
+	IN		AlongLongWall
+	JZERO	LoadShortDistance
+	
+; We are travelling along the long edge, so check this distance bound
+LoadLongDistance:
 	IN		XPOS
-	; Check if it has gone too far (x > maxPos)
 	SUB		MaxLong
+	JUMP	DistanceCheck
+	
+; We are travelling along the short edge, so check this distance bound
+LoadShortDistance:
+	IN		XPOS
+	SUB		MaxShort
+	JUMP 	DistanceCheck
+	
+DistanceCheck:
 	JPOS	DoneForward
 	
 	; TODO Check if we are about to hit an object with the ultrasonic sensors
-	; TODO don't read directly from the sensors? Read from occupancy map?
 	; TODO interrupts instead of checking at each loop?
+	; CHECKME maybe we should aggregate this data as well?
 	
-	; Keep going forward
-	; TODO tweak the speeds
+	; Keep going forward as we have not hit the max limit for the wall
+	; FIXME tweak the speeds
 	LOAD	FMID
 	OUT		LVELCMD
 	OUT		RVELCMD
@@ -123,7 +137,7 @@ KeepGoingForward:
 	; Keep looping
 	JUMP	KeepGoingForward
 	
-; We are 11 feet away from home in the x direction now
+; We are at the max bound of the wall now
 DoneForward:
 	; Stop the wheels
 	LOAD	ZERO
