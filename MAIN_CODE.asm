@@ -147,6 +147,7 @@ InitialSearch:
 
 		; Rotate 180 (direction doesn't matter)
 		LOAD	Deg180
+		STORE	Angle
 		CALL	Rotate
 
 		; Return to main
@@ -196,9 +197,6 @@ FindAndTagClosestObject:
 	; Go toward the object until we hit the y distance
 	MoveTowardObject:
 
-		; Update the map with the current sensor readings
-		CALL 	UpdateMap
-
 		; Do the bounds check
 		LOAD 	XPOS
 		SUB 	ObjectXDist
@@ -216,7 +214,10 @@ FindAndTagClosestObject:
 		STORE 	XDir
 
 	MoveLoop:
+		; Update the map with the current sensor readings
 		CALL 	UpdateMap
+		
+		; Do the bounds check for real
 		LOAD XDir
 		JZERO CheckLess
 		JPOS CheckGreat
@@ -374,7 +375,7 @@ Mod360:
 		JNEG 	M360N
 		RETURN
 
-; Rotate X degrees
+; Rotate X degrees. Store X in the var Angle
 Rotate:
 		STORE	Temp
 
