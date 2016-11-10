@@ -87,7 +87,7 @@ InitializeVars:
 	
 	; Return!
 	RETURN
-
+	
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
 		; TODO change code based on 2 vars
@@ -99,30 +99,64 @@ InitialSearch:
 		OUT 	SONAREN
 	
 	; Go forward until we are at the end of the edge
-	; TODO Check if we are about to hit an object with the ultrasonic sensors
-	; TODO interrupts instead of checking at each loop?
+	KeepGoingForward:
 	
-	; Keep going forward
-	; TODO tweak the speeds
-	LOAD	FMID
-	OUT		LVELCMD
-	OUT		RVELCMD
+		; Update the map with the current sensor readings
+		; CALL Jeff's code here!
+		CALL 	UpdateMap
+		
+		; Check the robot has gone too far in the x direction
+		; Note that this distance depends on which wall we are following, stored in AlongLongWall
+		IN		AlongLongWall
+		JZERO	LoadShortDistance
+		
+	; We are travelling along the long edge, so check this distance bound
+	LoadLongDistance:
+		IN		XPOS
+		SUB		MaxLong
+		JUMP	DistanceCheck
+		
+	; We are travelling along the short edge, so check this distance bound
+	LoadShortDistance:
+		IN		XPOS
+		SUB		MaxShort
+		JUMP 	DistanceCheck
+		
+	DistanceCheck:
+		JPOS	DoneForward
+		
+		; TODO Check if we are about to hit an object with the ultrasonic sensors
+		; TODO interrupts instead of checking at each loop?
+		; CHECKME maybe we should aggregate this data as well?
+		
+		; Keep going forward as we have not hit the max limit for the wall
+		; FIXME tweak the speeds
+		LOAD	FMID
+		OUT		LVELCMD
+		OUT		RVELCMD
+		
+		; Keep looping
+		JUMP	KeepGoingForward
+		
+	; We are at the max bound of the wall now
+	DoneForward:
+		; Stop the wheels
+		LOAD	ZERO
+		OUT		LVELCMD
+		OUT		RVELCMD
+		
+		; Rotate 180 (direction doesn't matter)
+		LOAD	Deg180
+		CALL	Rotate
+		
+		; Return to main
+		RETURN
 	
 UpdateMap:
 	;Traverse an axis, but store the SMALLEST value read by sonar sensor and associate an XPOS with that location
  	LOAD 	AlongLongWall
-	JPOS 	LGO ;If no switches active, robot setup values for long axis traverse
-	JZERO  	SGO ;If SW0 active, robot setup values for short axis traverse
-
-	; Check if it has gone too far 
-DistanceCheck:
-	LOAD 	AlongLongWall
-	JPOS 	LoadLongDistance
-	JZERO 	LoadShortDistance
-	JNEG	UpdateMap
-	JPOS	DoneForward
-	JZERO	DoneForward
-
+	JPOS 	LGO ; If no switches active, robot setup values for long axis traverse
+	JZERO  	SGO ; If SW0 active, robot setup values for short axis traverse
 
 	LGO:
 	 	LOAD	MASK0
@@ -146,39 +180,8 @@ DistanceCheck:
 		STORE Cell
 		IN XPOS
 		STORE ObjLoc
-		Return
-		
-		; Check the robot has gone too far in the x direction
-		; Note that this distance depends on which wall we are following, stored in AlongLongWall
-		IN		AlongLongWall
-		JZERO	LoadShortDistance
-		
-	; We are travelling along the long edge, so check this distance bound
-	LoadLongDistance:
-		IN		XPOS
-		SUB		MaxLong
 		RETURN
-		
-	; We are travelling along the short edge, so check this distance bound
-	LoadShortDistance:
-		IN		XPOS
-		SUB		MaxShort
-		RETURN
-		
-		
-	; We are at the max bound of the wall now
-	DoneForward:
-		; Stop the wheels
-		LOAD	ZERO
-		OUT		LVELCMD
-		OUT		RVELCMD
-		
-		; Rotate 180 (direction doesn't matter)
-		LOAD	Deg180
-		CALL	Rotate
-		
-		; Return to main
-		RETURN
+
 
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
