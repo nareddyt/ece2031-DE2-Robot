@@ -161,19 +161,66 @@ UpdateMap:
 ; Turns toward object and tags it
 ; Then returns back home, retracing its path
 FindAndTagClosestObject:
-	; TODO move toward the object in the x direction
-	; TODO rotate the proper amount
-	; TODO call Randy's tag method	
 
-	; Return to main
-	RETURN
+		; Call method to get information about the closest object
+		CALL	FindClosestObject	
+		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist
+		; TODO bounds check on the closest object (just in case?!?)
+		
+		; Figure out which direction to move in to get to the object (+/- x)
+		JUMP	CheckPositive
+	
+	; Check if we need to go in +x to get to the object
+	CheckPositive:
+		; Load our position
+		IN		XPOS
+		SUB		ObjectXDist
+		JPOS	CheckNegative
+		
+		; We want to go in +x
+		IN		FMID
+		STORE 	TagVelocity
+		JUMP	MoveTowardObject
+	
+	; Check if we need to go in -x to get to the object
+	CheckNegative:
+		; FIXME safe to do the check again here (?)
+		; We want to go in -x
+		IN		RMID
+		STORE 	TagVelocity
+		JUMP	MoveTowardObject
+	
+	; Go toward the object until we hit the x distance
+	MoveTowardObject:
+	
+		; Update the map with the current sensor readings
+		CALL 	UpdateMap
+		
+		; TODO bounds check
+		
+		; Keep going +/- as we have not hit the max limit for the wall
+		; FIXME tweak the speeds
+		LOAD	TagVelocity
+		OUT		LVELCMD
+		OUT		RVELCMD
+		
+		; Keep looping
+		JUMP	MoveTowardObject
+		
+	AtObjectX:
+		; TODO turn for Randy's tagging
+		; TODO call Randy's tag method
+		; TODO return to home
+	
+		; Return to main
+		RETURN
 		
 ; Finds the closest object (relative to the wall) based on the map
 FindClosestObject:
 	; TODO
 	LOAD	ZERO
-	STORE	ObjectWallDist
-	STORE	ObjectPerpDist
+	STORE	ObjectXDist
+	STORE	ObjectYDist
 	RETURN
 		
 ; We are back at home now
@@ -438,10 +485,11 @@ Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
 ErrMargin: 			DW 4
-ObjectWallDist:		DW 0 	; The x position of the next closest object
-ObjectPerpDist:		DW 0	; The absolute value of the y position of the next closest object
+ObjectXDist:		DW 0 	; The x position of the next closest object
+ObjectYDist:		DW 0	; The absolute value of the y position of the next closest object
 AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
 ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a positive angle to tag objects
+TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
 
 
 ;***************************************************************
