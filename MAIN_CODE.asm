@@ -60,13 +60,13 @@ Main:
 
 ; Main loop to search begins here
 MainLoop:
-	; Test code for object tagging
-	; Read in switch data and initialize vars
-	; CALL	TestTag
-	; Start initial XY search
-	; CALL InitialSearch
-	; TODO
-
+	CALL	InitializeVars
+	CALL	InitialSearch
+	
+	; TODO we need some way to keep track of the number of objects left
+	; while (numObjects > 0) { call FindAndTagClosestObject }
+	CALL	FindAndTagClosestObject
+	
 ;**************************************************
 ; Important Subroutines
 ;**************************************************
@@ -82,102 +82,103 @@ InitializeVars:
 	AND		MASK1
 	STORE	ObjectsPosTheta
 	
+	; Reset odometer in case wheels move after initialization
+	OUT 	RESETPOS
+	
 	; Return!
 	RETURN
 
-; Initial search along walls
+; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
-	; TODO change code based on 2 vars
+		; TODO change code based on 2 vars
+		
+		; Enable sonar sensors 2 and 3 to make sure we don't run into anything
+		; TODO do this with interrupts instead of just checking every loop cycle
+		LOAD	MASK2
+		ADD		MASK3
+		OUT 	SONAREN
 	
-	; Enable sonar sensors 2 and 3 to make sure we don't run into anything
-	; TODO do this with interrupts instead of just checking every loop cycle
-	LOAD	MASK2
-	ADD		MASK3
-	OUT 	SONAREN
+	; Go forward until we are at the end of the edge
+	KeepGoingForward:
 	
-	; Reset odometer in case wheels move after initialization
-	OUT 	RESETPOS
+		; Update the map with the current sensor readings
+		CALL 	UpdateMap
+		
+		; Check the robot has gone too far in the x direction
+		; Note that this distance depends on which wall we are following, stored in AlongLongWall
+		IN		AlongLongWall
+		JZERO	LoadShortDistance
+		
+	; We are travelling along the long edge, so check this distance bound
+	LoadLongDistance:
+		IN		XPOS
+		SUB		MaxLong
+		JUMP	DistanceCheck
+		
+	; We are travelling along the short edge, so check this distance bound
+	LoadShortDistance:
+		IN		XPOS
+		SUB		MaxShort
+		JUMP 	DistanceCheck
+		
+	DistanceCheck:
+		JPOS	DoneForward
+		
+		; TODO Check if we are about to hit an object with the ultrasonic sensors
+		; TODO interrupts instead of checking at each loop?
+		; CHECKME maybe we should aggregate this data as well?
+		
+		; Keep going forward as we have not hit the max limit for the wall
+		; FIXME tweak the speeds
+		LOAD	FMID
+		OUT		LVELCMD
+		OUT		RVELCMD
+		
+		; Keep looping
+		JUMP	KeepGoingForward
+		
+	; We are at the max bound of the wall now
+	DoneForward:
+		; Stop the wheels
+		LOAD	ZERO
+		OUT		LVELCMD
+		OUT		RVELCMD
+		
+		; Rotate 180 (direction doesn't matter)
+		LOAD	Deg180
+		CALL	Rotate
+		
+		; Return to main
+		RETURN
+		
+; Update Occupancy Grid Map
+UpdateMap:
+	; TODO ENTER CODE HERE
+	; TODO make sure to enable the correct sensor based on ObjectsPosTheta. Ask Teju about it...
+	RETURN
 
-; Go forward until we are at the end of the edge
-KeepGoingForward:
+; Goes to the x position the closest object is located at
+; Turns toward object and tags it
+; Then returns back home, retracing its path
+FindAndTagClosestObject:
+	; TODO move toward the object in the x direction
+	; TODO rotate the proper amount
+	; TODO call Randy's tag method	
 
-	; Update the map with the current sensor readings
-	CALL 	UpdateMap
-	
-	; Check the robot has gone too far in the x direction
-	; Note that this distance depends on which wall we are following, stored in AlongLongWall
-	IN		AlongLongWall
-	JZERO	LoadShortDistance
-	
-; We are travelling along the long edge, so check this distance bound
-LoadLongDistance:
-	IN		XPOS
-	SUB		MaxLong
-	JUMP	DistanceCheck
-	
-; We are travelling along the short edge, so check this distance bound
-LoadShortDistance:
-	IN		XPOS
-	SUB		MaxShort
-	JUMP 	DistanceCheck
-	
-DistanceCheck:
-	JPOS	DoneForward
-	
-	; TODO Check if we are about to hit an object with the ultrasonic sensors
-	; TODO interrupts instead of checking at each loop?
-	; CHECKME maybe we should aggregate this data as well?
-	
-	; Keep going forward as we have not hit the max limit for the wall
-	; FIXME tweak the speeds
-	LOAD	FMID
-	OUT		LVELCMD
-	OUT		RVELCMD
-	
-	; Keep looping
-	JUMP	KeepGoingForward
-	
-; We are at the max bound of the wall now
-DoneForward:
-	; Stop the wheels
+	; Return to main
+	RETURN
+		
+; Finds the closest object (relative to the wall) based on the map
+FindClosestObject:
+	; TODO
 	LOAD	ZERO
-	OUT		LVELCMD
-	OUT		RVELCMD
-	
-	; Rotate 180
-	LOAD	Deg180
-	CALL	Rotate
-
-; Go forward until we are at home
-GoBackHome:
-	; Update the map with the current sensor readings
-	CALL 	UpdateMap
-	
-	; Read in the current X position
-	IN		XPOS
-	; Check if it has gone too far (x < 0)
-	JNEG	BackAtHome
-	
-	; TODO Check if we are about to hit an object with the ultrasonic sensors
-	; TODO don't read directly from the sensors? Read from occupancy map?
-	; TODO interrupts instead of checking at each loop?
-	
-	; Keep going forward
-	; TODO tweak the speeds
-	LOAD	FMID
-	OUT		LVELCMD
-	OUT		RVELCMD
-	
-	; Keep looping
-	JUMP	GoBackHome
+	STORE	ObjectWallDist
+	STORE	ObjectPerpDist
+	RETURN
 		
 ; We are back at home now
 BackAtHome:
-	RETURN
-
-; Return home after tagging
-GoHome:
-	; TODO ENTER CODE HERE
+	; TODO wait for user input to start again
 	RETURN
 
 ; Tag object
@@ -206,12 +207,6 @@ TagHit:
     LOAD 	FSlow
 	LOAD 	Temp ; TODO
 	JUMP 	TagHit
-	RETURN
-
-; Update Occupancy Grid Map
-UpdateMap:
-	; TODO ENTER CODE HERE
-	; TODO make sure to enable the correct sensor based on ObjectsPosTheta. Ask Teju about it...
 	RETURN
 
 ; Test Object Tagging
@@ -243,13 +238,6 @@ Tag2:
 	CALL 	Rotate
 	CALL 	Tag
 	CALL 	Die
-	
-; Finds the closest object to the wall based on the map
-FindClosestObject:
-	LOAD	ZERO
-	STORE	ObjectWallDist
-	STORE	ObjectPerpDist
-	RETURN
 
 
 ; Sometimes it's useful to permanently stop execution.
@@ -262,9 +250,11 @@ Die:
 	OUT    SONAREN
 	LOAD   DEAD         ; An indication that we are dead
 	OUT    SSEG2        ; "dEAd" on the LEDs
-Forever:
-	JUMP   Forever      ; Do this forever.
-	DEAD:  DW &HDEAD    ; Example of a "local" variable
+	
+	; Our version of HALT
+	Forever:
+		JUMP   Forever      ; Do this forever.
+		DEAD:  DW &HDEAD    ; Example of a "local" variable
 	
 ;**************************************************
 ; Helper Subroutines
@@ -277,76 +267,83 @@ ShortBeep:
 	LOADI	1
 	STORE	WaitTime
 	OUT		Timer
-BeepLoop:
-	IN 		Timer
-	SUB 	WaitTime
-	JNEG	BeepLoop
-	LOADI	0
-	OUT		BEEP
-	LOAD 	Temp
-	RETURN
+	
+	BeepLoop:
+		IN 		Timer
+		SUB 	WaitTime
+		JNEG	BeepLoop
+		LOADI	0
+		OUT		BEEP
+		LOAD 	Temp
+		RETURN
 
 ; Mod360 (keep angle between 0 and 359)
 Mod360:
 	JNEG	M360N
 	ADDI 	-360
 	JUMP 	Mod360
-M360N:
-	ADDI 	360
-	JNEG 	M360N
-	RETURN
+	
+	M360N:
+		ADDI 	360
+		JNEG 	M360N
+		RETURN
 
 ; Rotate X degrees
 Rotate:
-	STORE	Temp
-; Calculate Threshold Values
-	IN 		THETA
-	ADD 	Angle
-	SUB 	ErrMargin
-	CALL 	Mod360
-	STORE 	LowErr
-
-	IN 		THETA
-	ADD 	Angle
-	ADD 	ErrMargin
-	CALL 	Mod360
-	STORE 	HighErr
-; Check rotation direction
-	LOAD 	Angle
-	JNEG 	RotateCW ; else RotateCC
-; Rotate CounterClock
-RotateCC:
-	LOAD 	FSlow
-	OUT		RVELCMD
-	LOAD 	RSlow
-	OUT		LVELCMD
-; Check if Theta is correct
-	IN 		THETA
-	SUB 	HighErr
-	JPOS	RotateCC
-	IN 		THETA
-	SUB  	LowErr
-	JNEG	RotateCC
-	JUMP 	RotateEnd
-RotateCW:
-	LOAD 	RSlow
-	OUT		RVELCMD
-	LOAD 	FSlow
-	OUT		LVELCMD
-; Check if Theta is correct
-	IN 		THETA
-	SUB 	HighErr
-	JPOS	RotateCW
-	IN 		THETA
-	SUB  	LowErr
-	JNEG	RotateCW
-RotateEnd:
-; Stop movement and return
-	LOAD 	ZERO
-	OUT 	LVELCMD
-	OUT 	RVELCMD
-	LOAD 	Temp
-	RETURN
+		STORE	Temp
+		
+		; Calculate Threshold Values
+		IN 		THETA
+		ADD 	Angle
+		SUB 	ErrMargin
+		CALL 	Mod360
+		STORE 	LowErr
+	
+		IN 		THETA
+		ADD 	Angle
+		ADD 	ErrMargin
+		CALL 	Mod360
+		STORE 	HighErr
+		
+		; Check rotation direction
+		LOAD 	Angle
+		JNEG 	RotateCW ; else RotateCC
+		
+	; Rotate CounterClock
+	RotateCC:
+		LOAD 	FSlow
+		OUT		RVELCMD
+		LOAD 	RSlow
+		OUT		LVELCMD
+	; Check if Theta is correct
+		IN 		THETA
+		SUB 	HighErr
+		JPOS	RotateCC
+		IN 		THETA
+		SUB  	LowErr
+		JNEG	RotateCC
+		JUMP 	RotateEnd
+		
+	RotateCW:
+		LOAD 	RSlow
+		OUT		RVELCMD
+		LOAD 	FSlow
+		OUT		LVELCMD
+		; Check if Theta is correct
+		IN 		THETA
+		SUB 	HighErr
+		JPOS	RotateCW
+		IN 		THETA
+		SUB  	LowErr
+		JNEG	RotateCW
+		
+	RotateEnd:
+	; Stop movement and return
+		LOAD 	ZERO
+		OUT 	LVELCMD
+		OUT 	RVELCMD
+		LOAD 	Temp
+		RETURN
 
 ; Subroutine to wait (block) for 1 second
 Wait1:
