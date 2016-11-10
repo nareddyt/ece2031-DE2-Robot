@@ -215,6 +215,7 @@ FindAndTagClosestObject:
 		STORE XDir
 
 		MoveLoop:
+		CALL 	UpdateMap
 		LOAD XDir
 		JZERO CheckLess:
 
