@@ -133,7 +133,7 @@ InitialSearch:
 		; FIXME tweak the speeds
 		IN		THETA
 		STORE	DTheta
-		IN		FFast
+		LOAD	FFast
 		STORE	DVel
 		CALL	ControlMovement
 

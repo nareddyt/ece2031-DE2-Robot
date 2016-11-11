@@ -65,7 +65,7 @@ CONTENT
            034 : 383B;  -- 		JPOS	DoneForward
            035 : 90C2;  -- 		IN		THETA
            036 : 110E;  -- 		STORE	DTheta
-           037 : 919E;  -- 		IN		FFast
+           037 : 099E;  -- 		LOAD	FFast
            038 : 110F;  -- 		STORE	DVel
            039 : 8110;  -- 		CALL	ControlMovement
            03A : 282B;  -- 		JUMP	KeepGoingForward
