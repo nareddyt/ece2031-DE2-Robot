@@ -107,7 +107,7 @@ InitialSearch:
 
 		; Check the robot has gone too far in the x direction
 		; Note that this distance depends on which wall we are following, stored in AlongLongWall
-		IN		AlongLongWall
+		LOAD	AlongLongWall
 		JZERO	LoadShortDistance
 
 	; We are travelling along the long edge, so check this distance bound
@@ -131,9 +131,11 @@ InitialSearch:
 
 		; Keep going forward as we have not hit the max limit for the wall
 		; FIXME tweak the speeds
-		LOAD	FMID
-		OUT		LVELCMD
-		OUT		RVELCMD
+		IN		THETA
+		STORE	DTheta
+		IN		FFast
+		STORE	DVel
+		CALL	ControlMovement
 
 		; Keep looping
 		JUMP	KeepGoingForward
@@ -496,6 +498,66 @@ Rotate:
 		LOAD 	Temp
 		RETURN
 
+; Control code.  If called repeatedly, this code will attempt
+; to control the robot to face the angle specified in DTheta
+; and match the speed specified in DVel
+DTheta:    DW 0
+DVel:      DW 0
+ControlMovement:
+	; convenient way to get +/-180 angle error is
+	; ((error + 180) % 360 ) - 180
+	IN     THETA
+	SUB    DTheta      ; actual - desired angle
+	CALL   Neg         ; desired - actual angle
+	ADDI   180
+	CALL   Mod360
+	ADDI   -180
+	; A quick-and-dirty way to get a decent velocity value
+	; for turning is to multiply the angular error by 4.
+	SHIFT  2
+	STORE  CMAErr      ; hold temporarily
+
+
+	; For this basic control method, simply take the
+	; desired forward velocity and add a differential
+	; velocity for each wheel when turning is needed.
+	LOAD   DVel
+	ADD    CMAErr
+	CALL   CapVel      ; ensure velocity is valid
+	OUT    RVELCMD
+	LOAD   CMAErr
+	CALL   Neg         ; left wheel gets negative differential
+	ADD    DVel
+	CALL   CapVel
+	OUT    LVELCMD
+
+	RETURN
+	CMAErr: DW 0       ; holds angle error velocity
+
+CapVel:
+	; cap velocity values for the motors
+	ADDI    -500
+	JPOS    CapVelHigh
+	ADDI    500
+	ADDI    500
+	JNEG    CapVelLow
+	ADDI    -500
+	RETURN
+CapVelHigh:
+	LOADI   500
+	RETURN
+CapVelLow:
+	LOADI   -500
+	RETURN
+
+Abs:
+	JPOS   Abs_r
+Neg:
+	XOR    NegOne       ; Flip all bits
+	ADDI   1            ; Add one (i.e. negate number)
+Abs_r:
+	RETURN
+
 ; Subroutine to wait (block) for 1 second
 Wait1:
 	OUT    TIMER
@@ -580,43 +642,6 @@ GetBattLvl:
 	IN     I2C_DATA    ; get the returned data
 	RETURN
 
-	; Control code.  If called repeatedly, this code will attempt
-	; to control the robot to face the angle specified in DTheta
-	; and match the speed specified in DVel
-	DTheta:    DW 0
-	DVel:      DW 0
-	ControlMovement:
-		; convenient way to get +/-180 angle error is
-		; ((error + 180) % 360 ) - 180
-		IN     THETA
-		SUB    DTheta      ; actual - desired angle
-		CALL   Neg         ; desired - actual angle
-		ADDI   180
-		CALL   Mod360
-		ADDI   -180
-		; A quick-and-dirty way to get a decent velocity value
-		; for turning is to multiply the angular error by 4.
-		SHIFT  2
-		STORE  CMAErr      ; hold temporarily
-
-
-		; For this basic control method, simply take the
-		; desired forward velocity and add a differential
-		; velocity for each wheel when turning is needed.
-		LOAD   DVel
-		ADD    CMAErr
-		CALL   CapVel      ; ensure velocity is valid
-		OUT    RVELCMD
-		LOAD   CMAErr
-		CALL   Neg         ; left wheel gets negative differential
-		ADD    DVel
-		CALL   CapVel
-		OUT    LVELCMD
-
-		RETURN
-		;CMAErr: DW 0       ; holds angle error velocity
-
-
 ;***************************************************************
 ;* Variables
 ;***************************************************************
@@ -626,14 +651,14 @@ Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
 ErrMargin: 			DW 4
-XDir:						DW 0	; Direction on the X access robot is moving
+XDir:				DW 0	; Direction on the X access robot is moving
 ObjectXDist:		DW 0 	; The x position of the next closest object
 ObjectYDist:		DW 0	; The absolute value of the y position of the next closest object
 AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
 ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a positive angle to tag objects
 TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
-Cell: 				DW &H7FFF	; Initialize cell value
-ObjLoc:				DW 0	 	; Stores the location of the object to be tagged
+Cell: 				DW 300	; Initialize cell value
+ObjLoc:				DW 300	 ; Stores the location of the object to be tagged
 
 
 ;***************************************************************
@@ -682,7 +707,7 @@ RMid:     DW -350
 FFast:    DW 500       ; 500 is almost max speed (511 is max)
 RFast:    DW -500
 MaxLong:	DW 2931	   	; 12 ft - 2ft (for home and robot) = 10ft = 3048 mm =~ 2900 increments in position
-MaxShort:	DW 1740		; 8ft - 2ft (for home and robot) = 6ft = 1740 mm =~ 1740 increments in position
+MaxShort:	DW 1740		; TEST 8ft - 2ft (for home and robot) = 6ft = 1740 mm =~ 1740 increments in position
 
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
 I2CWCmd:  DW &H1190    ; write one i2c byte, read one byte, addr 0x90
