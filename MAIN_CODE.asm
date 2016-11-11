@@ -196,7 +196,7 @@ filterArray:
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
 ; Then returns back home, retracing its path
-FindAndTagClosestObject:
+FindAndTagClosestObject: 
 
 		; Call method to get information about the closest object
 		CALL	FindClosestObject
