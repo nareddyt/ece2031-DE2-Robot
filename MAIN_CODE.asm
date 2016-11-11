@@ -162,27 +162,28 @@ UpdateMap:
 	JZERO  	SGO ; If SW0 active, robot setup values for short axis traverse
 
 	LGO:
-	 	LOAD	MASK0
+	 	LOAD	MASK5
 	 	OUT 	SONAREN
-	 	IN 		DIST0 ;Turn on and read value from sensor 0
-	 	SUB 	Cell ;subtract current value in cell
-	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
+	 	IN 		DIST5 ;Turn on and read value from sensor 5
+		CALL	CellIn ; If value read in less than the value already in cell, store it in cell
 	 	RETURN
 
 	SGO:
-		LOAD	MASK5
+		LOAD	MASK0
 		OUT 	SONAREN
-		IN 		DIST5
-		SUB 	Cell ;subtract current value in cell
-	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
+		IN 		DIST0
+	 	CALL	CellIn ; If value read in less than the value already in cell, store it in cell
 		RETURN
 
 	CellIn:
-		; Add back the value of cell and store the dist measurement into cell
-		ADD Cell
-		STORE Cell
-		IN XPOS
-		STORE ObjLoc
+	; Store value of cell into memory adress pointed to by XposIndex
+		STORE 	Cell ;store current distance read in cell
+	 	IN		XPOS ;Take in xposition
+		SHIFT 	five ;Index value of the array (applies same dist value cells of length 32 increments)
+		ADDI	CellArrI ;Add the value of starting address (where the memory for array begins)
+		STORE 	XposIndex ;Holds the adress where the dist value will be placed
+		LOAD 	CELL
+		ISTORE	XposIndex 
 		RETURN
 
 
