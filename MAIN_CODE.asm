@@ -181,7 +181,7 @@ UpdateMap:
 		ADDI	CellArrI ;Add the value of starting address (where the memory for array begins)
 		STORE 	XposIndex ;Holds the adress where the dist value will be placed
 		LOAD 	CELL
-		ISTORE	XposIndex 
+		ISTORE	XposIndex
 		RETURN
 
 
@@ -581,43 +581,6 @@ GetBattLvl:
 	IN     I2C_DATA    ; get the returned data
 	RETURN
 
-	; Control code.  If called repeatedly, this code will attempt
-	; to control the robot to face the angle specified in DTheta
-	; and match the speed specified in DVel
-	DTheta:    DW 0
-	DVel:      DW 0
-	ControlMovement:
-		; convenient way to get +/-180 angle error is
-		; ((error + 180) % 360 ) - 180
-		IN     THETA
-		SUB    DTheta      ; actual - desired angle
-		CALL   Neg         ; desired - actual angle
-		ADDI   180
-		CALL   Mod360
-		ADDI   -180
-		; A quick-and-dirty way to get a decent velocity value
-		; for turning is to multiply the angular error by 4.
-		SHIFT  2
-		STORE  CMAErr      ; hold temporarily
-
-
-		; For this basic control method, simply take the
-		; desired forward velocity and add a differential
-		; velocity for each wheel when turning is needed.
-		LOAD   DVel
-		ADD    CMAErr
-		CALL   CapVel      ; ensure velocity is valid
-		OUT    RVELCMD
-		LOAD   CMAErr
-		CALL   Neg         ; left wheel gets negative differential
-		ADD    DVel
-		CALL   CapVel
-		OUT    LVELCMD
-
-		RETURN
-		;CMAErr: DW 0       ; holds angle error velocity
-
-
 ;***************************************************************
 ;* Variables
 ;***************************************************************
@@ -733,10 +696,10 @@ RESETPOS: EQU &HC3  ; write anything here to reset odometry to 0
 RIN:      EQU &HC8
 LIN:      EQU &HC9
 ;***************************************************************
-;* Allocate space in memory for our x and y arrays 
+;* Allocate space in memory for our x and y arrays
 ;* and our temporary array which will be used to estimate the distance by averaging a number of values
 ;* The x-array will inititialize at a location sufficiently far away from other instructions
 ;* Allows for dynamic length and known locations of words
 ;***************************************************************
 		 ORG     &H44C ; Start at location 1100 for the occupancy array
-OcArray: DW &H7FFF		 
+OcArray: DW &H7FFF
