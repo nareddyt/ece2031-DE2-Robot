@@ -156,35 +156,42 @@ InitialSearch:
 		RETURN
 
 UpdateMap:
-	;Traverse an axis, but store the SMALLEST value read by sonar sensor and associate an XPOS with that location
+	;Traverse an axis,and store the distance recieved (represents 32mm increment)
  	LOAD 	AlongLongWall
 	JPOS 	LGO ; If no switches active, robot setup values for long axis traverse
 	JZERO  	SGO ; If SW0 active, robot setup values for short axis traverse
 
 	LGO:
-	 	LOAD	MASK0
+	 	LOAD	MASK5
 	 	OUT 	SONAREN
-	 	IN 		DIST0 ;Turn on and read value from sensor 0
-	 	SUB 	Cell ;subtract current value in cell
-	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
+	 	IN 		DIST5 ;Turn on and read value from sensor 5
+		CALL	CellIn ; If value read in less than the value already in cell, store it in cell
 	 	RETURN
 
 	SGO:
-		LOAD	MASK5
+		LOAD	MASK0
 		OUT 	SONAREN
-		IN 		DIST5
-		SUB 	Cell ;subtract current value in cell
-	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
+		IN 		DIST0
+	 	CALL	CellIn ; If value read in less than the value already in cell, store it in cell
 		RETURN
 
 	CellIn:
-		; Add back the value of cell and store the dist measurement into cell
-		ADD Cell
-		STORE Cell
-		IN XPOS
-		STORE ObjLoc
+	; Store value of cell into memory adress pointed to by XposIndex
+		STORE 	Cell ;store current distance read in cell
+	 	IN		XPOS ;Take in xposition
+		SHIFT 	five ;Index value of the array (applies same dist value cells of length 32 increments)
+		ADDI	CellArrI ;Add the value of starting address (where the memory for array begins)
+		STORE 	XposIndex ;Holds the adress where the dist value will be placed
+		LOAD 	CELL
+		ISTORE	XposIndex 
 		RETURN
 
+;Subroutine that filters the array created in update map
+filterArray:
+	;TODO not every cell in the array will have a reading, we need to figure how to filter the readings to produce continuous object
+	;Account for two object being at the same distance away from wall
+	;Account for one object being behind another
+	Return
 
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
@@ -659,6 +666,10 @@ ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a pos
 TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
 Cell: 				DW 300	; Initialize cell value
 ObjLoc:				DW 300	 ; Stores the location of the object to be tagged
+CellCount:  		DW 0 		; How many values in the occupancy array
+CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
+XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
+
 
 
 ;***************************************************************
@@ -755,3 +766,11 @@ THETA:    EQU &HC2  ; Current rotational position of robot (0-359)
 RESETPOS: EQU &HC3  ; write anything here to reset odometry to 0
 RIN:      EQU &HC8
 LIN:      EQU &HC9
+;***************************************************************
+;* Allocate space in memory for our x and y arrays 
+;* and our temporary array which will be used to estimate the distance by averaging a number of values
+;* The x-array will inititialize at a location sufficiently far away from other instructions
+;* Allows for dynamic length and known locations of words
+;***************************************************************
+		 ORG     &H44C ; Start at location 1100 for the occupancy array
+OcArray: DW &H7FFF	
