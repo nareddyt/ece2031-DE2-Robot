@@ -216,7 +216,7 @@ FindAndTagClosestObject:
 	MoveLoop:
 		; Update the map with the current sensor readings
 		CALL 	UpdateMap
-		
+
 		; Do the bounds check for real
 		LOAD XDir
 		JZERO CheckLess
@@ -289,12 +289,21 @@ TagIt:
 	JUMP 	TagIt
 
 ; Tag/Hit object
-TagHit:
-	JUMP 	Die
-    LOAD 	FSlow
-	LOAD 	Temp ; TODO
-	JUMP 	TagHit
-	RETURN
+TimerTest:
+		OUT 	TIMER
+	TagHit:
+		LOAD 	FSlow
+		OUT 	LVELCMD
+		OUT		RVELCMD
+		; Checking encoder
+		IN 		LPOS
+		ADDI 	-290 ; 290.2857
+		JNEG	TagHit  ; When "reached" the object, difference should be positive/zero
+		; Checking timer
+		IN 		TIMER
+		ADDI	-290 ; 290.2857  ; Base off of bot velocity at 1.05 mm/s
+		JNEG	HitTest
+	    JUMP	GoHome
 
 ; Test Object Tagging
 TestTag:
