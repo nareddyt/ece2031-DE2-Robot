@@ -156,7 +156,7 @@ InitialSearch:
 		RETURN
 
 UpdateMap:
-	;Traverse an axis, but store the SMALLEST value read by sonar sensor and associate an XPOS with that location
+	;Traverse an axis,and store the distance recieved (represents 32mm increment)
  	LOAD 	AlongLongWall
 	JPOS 	LGO ; If no switches active, robot setup values for long axis traverse
 	JZERO  	SGO ; If SW0 active, robot setup values for short axis traverse
@@ -186,6 +186,12 @@ UpdateMap:
 		ISTORE	XposIndex 
 		RETURN
 
+;Subroutine that filters the array created in update map
+filterArray:
+	;TODO not every cell in the array will have a reading, we need to figure how to filter the readings to produce continuous object
+	;Account for two object being at the same distance away from wall
+	;Account for one object being behind another
+	Return
 
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
