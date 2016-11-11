@@ -332,44 +332,63 @@ BackAtHome:
 	; TODO wait for user input to start again
 	RETURN
 
-; Tag object
-Tag:
-	STORE 	Temp
-TagIt:
+; GoHome function will have the robot go home after tagging
+; Assumes DE2Bot is facing a wall and there is a clear straight path to wall
+GoHome:
+	; Initialize Movement variables
+	IN  	THETA
+	STORE 	DTheta
 	LOAD 	FMid
-	OUT 	LVELCMD
-	OUT 	RVELCMD
-	LOAD 	MASK2
-	OR 		MASK3
-	OUT 	SONAREN
-	IN 		DIST2
-	ADDI	-310
-	JNEG 	TagHit
+	STORE 	DVel
 
-	IN 		DIST3
-	ADDI 	-310
-	JNEG 	TagHit
-
-	JUMP 	TagIt
-
-; Tag/Hit object
-TimerTest:
-		OUT 	TIMER
-	TagHit:
-		LOAD 	FSlow
-		OUT 	LVELCMD
-		OUT		RVELCMD
-		; Checking encoder
-		IN 		LPOS
-		ADDI 	-290 ; 290.2857
-		JNEG	TagHit  ; When "reached" the object, difference should be positive/zero
-		; Checking timer
-		IN 		TIMER
-		ADDI	-290 ; 290.2857  ; Base off of bot velocity at 1.05 mm/s
-		JNEG	HitTest
-	    JUMP	GoHome
+; Tag function will travel to an object X distance away, tag it, and rotate to face the wall
+; Assumes DE2Bot is facing object and there is a clear, linear path to object
+Tag:
+	; Saves whatever is in AC
+	STORE 	Temp
+	; Update EncoderY (initial value)
+	IN   	YPOS
+	STORE 	EncoderY
+	; Control Movement Variables
+	LOADI 	THETA
+	STORE 	DTheta
+	LOAD 	FMid
+	STORE 	DVel
+TagIt:
+	; Move robot
+	CALL 	ControlMovement
+	; Check distance traveled
+	; Subtract initial EncoderY Pos, Cell Dist, and error margin
+	IN 		YPOS
+	CALL 	Abs
+	SUB 	EncoderY
+	SUB 	Cell
+	ADDI 	-10
+	JNEG 	TagIt
+	; Prepare to move backwards a little
+	; Update EncoderY and Control Movement
+	IN 		YPOS
+	CALL 	Abs
+	ADDI 	-30
+	STORE 	EncoderY
+	LOAD 	RMid
+	STORE 	DVel
+MoveBack:
+	; Move backwards a little
+	CALL ControlMovement
+	; Check distance
+	IN 		YPOS
+	CALL 	Abs
+	SUB 	EncoderY
+	JPOS 	MoveBack
+	; Rotate 180 and GoHome
+	LOADI 	180
+	CALL 	Rotate
+	CALL 	GoHome
 
 ; Test Object Tagging
+; THIS IS RANDOM TEST CODE
+; Detects Object in sensor 1 or 4 and travels to that object
 TestTag:
 	LOAD 	MASK4
 	OR 		MASK1
@@ -399,7 +418,6 @@ Tag2:
 	CALL 	Tag
 	CALL 	Die
 
-
 ; Sometimes it's useful to permanently stop execution.
 ; This will also catch the execution if it accidentally
 ; falls through from above.
@@ -419,6 +437,16 @@ Die:
 ;**************************************************
 ; Helper Subroutines
 ;**************************************************
+
+; Calculate absolute value for value in AC
+Abs:
+	JPOS   Abs_r
+Neg:
+	XOR    NegOne       ; Flip all bits
+	ADDI   1            ; Add one (i.e. negate number)
+Abs_r:
+	RETURN
+
 
 ShortBeep:
 	STORE	Temp
@@ -598,7 +626,7 @@ Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
 ErrMargin: 			DW 4
-XDir:						DW 0	; Direction on the X access robot is moving
+XDir:				DW 0	; Direction on the X access robot is moving
 ObjectXDist:		DW 0 	; The x position of the next closest object
 ObjectYDist:		DW 0	; The absolute value of the y position of the next closest object
 AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
@@ -606,6 +634,7 @@ ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a pos
 TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
 Cell: 				DW &H7FFF	; Initialize cell value
 ObjLoc:				DW 0	 	; Stores the location of the object to be tagged
+EncoderY: 			DW 0		; Stores current value of encoder in Y direction
 
 
 ;***************************************************************
