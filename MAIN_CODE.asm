@@ -160,27 +160,28 @@ UpdateMap:
 	JZERO  	SGO ; If SW0 active, robot setup values for short axis traverse
 
 	LGO:
-	 	LOAD	MASK0
+	 	LOAD	MASK5
 	 	OUT 	SONAREN
-	 	IN 		DIST0 ;Turn on and read value from sensor 0
-	 	SUB 	Cell ;subtract current value in cell
-	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
+	 	IN 		DIST5 ;Turn on and read value from sensor 5
+		CALL	CellIn ; If value read in less than the value already in cell, store it in cell
 	 	RETURN
 
 	SGO:
-		LOAD	MASK5
+		LOAD	MASK0
 		OUT 	SONAREN
-		IN 		DIST5
-		SUB 	Cell ;subtract current value in cell
-	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
+		IN 		DIST0
+	 	CALL	CellIn ; If value read in less than the value already in cell, store it in cell
 		RETURN
 
 	CellIn:
-		; Add back the value of cell and store the dist measurement into cell
-		ADD Cell
-		STORE Cell
-		IN XPOS
-		STORE ObjLoc
+	; Store value of cell into memory adress pointed to by XposIndex
+		STORE 	Cell ;store current distance read in cell
+	 	IN		XPOS ;Take in xposition
+		SHIFT 	five ;Index value of the array (applies same dist value cells of length 32 increments)
+		ADDI	CellArrI ;Add the value of starting address (where the memory for array begins)
+		STORE 	XposIndex ;Holds the adress where the dist value will be placed
+		LOAD 	CELL
+		ISTORE	XposIndex 
 		RETURN
 
 
@@ -314,7 +315,7 @@ AtMiddle:
 	Rotate10:
 		LOAD 	ZERO
 		ADDI 	12
-		STORE Angle
+		STORE   Angle
 		JUMP	Rotate
 		JUMP	CheckMidObj
 
@@ -589,7 +590,7 @@ Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
 ErrMargin: 			DW 4
-XDir:						DW 0	; Direction on the X access robot is moving
+XDir:				DW 0	; Direction on the X access robot is moving
 ObjectXDist:		DW 0 	; The x position of the next closest object
 ObjectYDist:		DW 0	; The absolute value of the y position of the next closest object
 AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
@@ -597,7 +598,9 @@ ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a pos
 TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
 Cell: 				DW &H7FFF	; Initialize cell value
 ObjLoc:				DW 0	 	; Stores the location of the object to be tagged
-
+CellCount:  		DW 0 		; How many values in the occupancy array
+CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
+XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
 
 ;***************************************************************
 ;* Constants
@@ -646,7 +649,6 @@ FFast:    DW 500       ; 500 is almost max speed (511 is max)
 RFast:    DW -500
 MaxLong:	DW 2931	   	; 12 ft - 2ft (for home and robot) = 10ft = 3048 mm =~ 2900 increments in position
 MaxShort:	DW 1740		; 8ft - 2ft (for home and robot) = 6ft = 1740 mm =~ 1740 increments in position
-
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
 I2CWCmd:  DW &H1190    ; write one i2c byte, read one byte, addr 0x90
 I2CRCmd:  DW &H0190    ; write nothing, read one byte, addr 0x90
@@ -693,3 +695,11 @@ THETA:    EQU &HC2  ; Current rotational position of robot (0-359)
 RESETPOS: EQU &HC3  ; write anything here to reset odometry to 0
 RIN:      EQU &HC8
 LIN:      EQU &HC9
+;***************************************************************
+;* Allocate space in memory for our x and y arrays 
+;* and our temporary array which will be used to estimate the distance by averaging a number of values
+;* The x-array will inititialize at a location sufficiently far away from other instructions
+;* Allows for dynamic length and known locations of words
+;***************************************************************
+		 ORG     &H44C ; Start at location 1100 for the occupancy array
+OcArray: DW &H7FFF		 
