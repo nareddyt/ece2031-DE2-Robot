@@ -181,7 +181,7 @@ UpdateMap:
 		ADDI	CellArrI ;Add the value of starting address (where the memory for array begins)
 		STORE 	XposIndex ;Holds the adress where the dist value will be placed
 		LOAD 	CELL
-		ISTORE	XposIndex 
+		ISTORE	XposIndex
 		RETURN
 
 
@@ -217,7 +217,7 @@ FindAndTagClosestObject:
 	MoveLoop:
 		; Update the map with the current sensor readings
 		CALL 	UpdateMap
-		
+
 		; Do the bounds check for real
 		LOAD XDir
 		JZERO CheckLess
@@ -696,10 +696,10 @@ RESETPOS: EQU &HC3  ; write anything here to reset odometry to 0
 RIN:      EQU &HC8
 LIN:      EQU &HC9
 ;***************************************************************
-;* Allocate space in memory for our x and y arrays 
+;* Allocate space in memory for our x and y arrays
 ;* and our temporary array which will be used to estimate the distance by averaging a number of values
 ;* The x-array will inititialize at a location sufficiently far away from other instructions
 ;* Allows for dynamic length and known locations of words
 ;***************************************************************
 		 ORG     &H44C ; Start at location 1100 for the occupancy array
-OcArray: DW &H7FFF		 
+OcArray: DW &H7FFF
