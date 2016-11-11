@@ -330,16 +330,27 @@ FindClosestObject:
 ; We are back at home now
 BackAtHome:
 	; TODO wait for user input to start again
+	; For now just call die
+	CALL 	Die
 	RETURN
 
 ; GoHome function will have the robot go home after tagging
 ; Assumes DE2Bot is facing a wall and there is a clear straight path to wall
 GoHome:
-	; Initialize Movement variables
-	IN  	THETA
-	STORE 	DTheta
-	LOAD 	FMid
-	STORE 	DVel
+	; Go towards wall then stop when close
+	CALL 	GoToWall
+	; Determine which way to rotate
+	LOADI 	90
+	STORE 	Angle
+	LOAD 	ObjectsPosTheta
+	JZERO 	HomeRotate
+	LOADI 	-90
+	STORE 	Angle
+HomeRotate:
+	; Rotate to face wall then go home
+	CALL  	Rotate
+	CALL 	GoToWall
+	JUMP 	BackAtHome
 
 ; Tag function will travel to an object X distance away, tag it, and rotate to face the wall
 ; Assumes DE2Bot is facing object and there is a clear, linear path to object
@@ -386,38 +397,6 @@ MoveBack:
 	CALL 	Rotate
 	CALL 	GoHome
 
-; Test Object Tagging
-; THIS IS RANDOM TEST CODE
-; Detects Object in sensor 1 or 4 and travels to that object
-TestTag:
-	LOAD 	MASK4
-	OR 		MASK1
-	OUT 	SONAREN
-
-	IN 		DIST4
-	ADDI	-610 ;2 feet
-	JNEG 	Tag1
-	IN 		DIST1
-	ADDI	-610 ;2 feet
-	JNEG 	Tag2
-
-	LOAD 	FMid
-	OUT 	LVELCMD
-	OUT 	RVELCMD
-	JUMP 	TestTag
-Tag1:
-	LOADI 	-40
-	STORE 	Angle
-	CALL 	Rotate
-	CALL 	Tag
-	CALL 	Die
-Tag2:
-	LOADI 	40
-	STORE 	Angle
-	CALL 	Rotate
-	CALL 	Tag
-	CALL 	Die
-
 ; Sometimes it's useful to permanently stop execution.
 ; This will also catch the execution if it accidentally
 ; falls through from above.
@@ -447,6 +426,12 @@ Neg:
 Abs_r:
 	RETURN
 
+; Stops robot movement
+StopMovement:
+	LOAD 	ZERO
+	OUT 	LVELCMD
+	OUT 	RVELCMD
+	RETURN
 
 ShortBeep:
 	STORE	Temp
@@ -479,20 +464,19 @@ Mod360:
 ; Rotate X degrees. Store X in the var Angle
 Rotate:
 		STORE	Temp
-
 		; Calculate Threshold Values
+		; Calculate Lower Error Margin
 		IN 		THETA
 		ADD 	Angle
 		SUB 	ErrMargin
 		CALL 	Mod360
 		STORE 	LowErr
-
+		; Calculate High Error Margin
 		IN 		THETA
 		ADD 	Angle
 		ADD 	ErrMargin
 		CALL 	Mod360
 		STORE 	HighErr
-
 		; Check rotation direction
 		LOAD 	Angle
 		JNEG 	RotateCW ; else RotateCC
@@ -511,7 +495,7 @@ Rotate:
 		SUB  	LowErr
 		JNEG	RotateCC
 		JUMP 	RotateEnd
-
+	; Rotate Clockwise
 	RotateCW:
 		LOAD 	RSlow
 		OUT		RVELCMD
@@ -524,14 +508,35 @@ Rotate:
 		IN 		THETA
 		SUB  	LowErr
 		JNEG	RotateCW
-
 	RotateEnd:
 	; Stop movement and return
-		LOAD 	ZERO
-		OUT 	LVELCMD
-		OUT 	RVELCMD
+		CALL 	StopMovement
 		LOAD 	Temp
 		RETURN
+
+; Function tells DE2Bot to travel straight until wall is detected
+; Uses sensors 2 and 3 to detect wall
+GoToWall:
+	; Initialize sensors
+	LOAD 	MASK2
+	OR 		MASK3
+	OUT 	SONAREN
+	; Initialize movement variables
+	IN  	THETA
+	STORE 	DTheta
+	LOAD 	FMid
+	STORE 	DVel
+CheckWall:
+	CALL ControlMovement
+	; Check if distance is lower than threshold
+	IN 		DIST2
+	ADD 	WallThresh 	; 20 cm ~= 8 inches
+	JPOS 	CheckWall
+	IN 		DIST3
+	ADD 	WallThresh 	; 20 cm ~= 8 inches
+	JPOS 	CheckWall
+	CALL 	StopMovement 	; stops movement
+	RETURN
 
 ; Subroutine to wait (block) for 1 second
 Wait1:
@@ -635,6 +640,7 @@ TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has
 Cell: 				DW &H7FFF	; Initialize cell value
 ObjLoc:				DW 0	 	; Stores the location of the object to be tagged
 EncoderY: 			DW 0		; Stores current value of encoder in Y direction
+WallThresh: 		DW -200 	; Defines distance away from wall before DE2Bot should stop moving (used in GoHome function)
 
 
 ;***************************************************************
