@@ -1,5 +1,5 @@
 ; MAIN_CODE.asm
-; Created by team Harambe and the Boiz
+; Created by team HARAMBE AND THE BOIZ
 ; Team members: Randy Deng, Jeffrey Zhao, Tejasvi Nareddy, Kavin Krishnan, Hope Hong
 
 ;*************************************************
@@ -62,11 +62,11 @@ Main:
 MainLoop:
 	CALL	InitializeVars
 	CALL	InitialSearch
-	
+
 	; TODO we need some way to keep track of the number of objects left
 	; while (numObjects > 0) { call FindAndTagClosestObject }
 	CALL	FindAndTagClosestObject
-	
+
 ;**************************************************
 ; Important Subroutines
 ;**************************************************
@@ -76,109 +76,114 @@ InitializeVars:
 	IN		SWITCHES
 	AND		MASK0
 	STORE 	AlongLongWall
-	
+
 	; SW1 = ObjectsPosTheta --> Sets var to 1 if the robot must turn in the positive direction to tag objects
 	IN		SWITCHES
 	AND		MASK1
 	STORE	ObjectsPosTheta
-	
+
 	; Reset odometer in case wheels move after initialization
 	OUT 	RESETPOS
-	
+
 	; Return!
 	RETURN
 
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
 		; TODO change code based on 2 vars
-		
+
 		; Enable sonar sensors 2 and 3 to make sure we don't run into anything
 		; TODO do this with interrupts instead of just checking every loop cycle
 		LOAD	MASK2
 		ADD		MASK3
 		OUT 	SONAREN
-	
+
 	; Go forward until we are at the end of the edge
-	; TODO Check if we are about to hit an object with the ultrasonic sensors
-	; TODO interrupts instead of checking at each loop?
-	
-	; Keep going forward
-	; TODO tweak the speeds
-	LOAD	FMID
-	OUT		LVELCMD
-	OUT		RVELCMD
-	
-UpdateMap:
-	;Traverse an axis, but store the SMALLEST value read by sonar sensor and associate an XPOS with that location
- 	LOAD 	AlongLongWall
-	JPOS 	LGO ;If no switches active, robot setup values for long axis traverse
-	JZERO  	SGO ;If SW0 active, robot setup values for short axis traverse
+	KeepGoingForward:
 
-	; Check if it has gone too far 
-DistanceCheck:
-	LOAD 	AlongLongWall
-	JPOS 	LoadLongDistance
-	JZERO 	LoadShortDistance
-	JNEG	UpdateMap
-	JPOS	DoneForward
-	JZERO	DoneForward
+		; Update the map with the current sensor readings
+		; CALL Jeff's code here!
+		CALL 	UpdateMap
 
-
-	LGO:
-	 	LOAD	MASK0
-	 	OUT 	SONAREN
-	 	IN 		DIST0 ;Turn on and read value from sensor 0
-	 	SUB 	Cell ;subtract current value in cell 
-	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
-	 	RETURN
-
-	SGO:
-		LOAD	MASK5
-		OUT 	SONAREN
-		IN 		DIST5
-		SUB 	Cell ;subtract current value in cell 
-	 	JNEG	CellIn ; If value read in less than the value already in cell, store it in cell
-		RETURN
-
-	CellIn:
-		; Add back the value of cell and store the dist measurement into cell
-		ADD Cell
-		STORE Cell
-		IN XPOS
-		STORE ObjLoc
-		Return
-		
 		; Check the robot has gone too far in the x direction
 		; Note that this distance depends on which wall we are following, stored in AlongLongWall
 		IN		AlongLongWall
 		JZERO	LoadShortDistance
-		
+
 	; We are travelling along the long edge, so check this distance bound
 	LoadLongDistance:
 		IN		XPOS
 		SUB		MaxLong
-		RETURN
-		
+		JUMP	DistanceCheck
+
 	; We are travelling along the short edge, so check this distance bound
 	LoadShortDistance:
 		IN		XPOS
 		SUB		MaxShort
-		RETURN
-		
-		
+		JUMP 	DistanceCheck
+
+	DistanceCheck:
+		JPOS	DoneForward
+
+		; TODO Check if we are about to hit an object with the ultrasonic sensors
+		; TODO interrupts instead of checking at each loop?
+		; CHECKME maybe we should aggregate this data as well?
+
+		; Keep going forward as we have not hit the max limit for the wall
+		; FIXME tweak the speeds
+		LOAD	FMID
+		OUT		LVELCMD
+		OUT		RVELCMD
+
+		; Keep looping
+		JUMP	KeepGoingForward
+
 	; We are at the max bound of the wall now
 	DoneForward:
 		; Stop the wheels
 		LOAD	ZERO
 		OUT		LVELCMD
 		OUT		RVELCMD
-		
+
 		; Rotate 180 (direction doesn't matter)
 		LOAD	Deg180
+		STORE	Angle
 		CALL	Rotate
-		
+
 		; Return to main
 		RETURN
+
+UpdateMap:
+	;Traverse an axis, but store the SMALLEST value read by sonar sensor and associate an XPOS with that location
+ 	LOAD 	AlongLongWall
+	JPOS 	LGO ; If no switches active, robot setup values for long axis traverse
+	JZERO  	SGO ; If SW0 active, robot setup values for short axis traverse
+
+	LGO:
+	 	LOAD	MASK5
+	 	OUT 	SONAREN
+	 	IN 		DIST5 ;Turn on and read value from sensor 5
+		CALL	CellIn ; If value read in less than the value already in cell, store it in cell
+	 	RETURN
+
+	SGO:
+		LOAD	MASK0
+		OUT 	SONAREN
+		IN 		DIST0
+	 	CALL	CellIn ; If value read in less than the value already in cell, store it in cell
+		RETURN
+
+	CellIn:
+	; Store value of cell into memory adress pointed to by XposIndex
+		STORE 	Cell ;store current distance read in cell
+	 	IN		XPOS ;Take in xposition
+		SHIFT 	five ;Index value of the array (applies same dist value cells of length 32 increments)
+		ADDI	CellArrI ;Add the value of starting address (where the memory for array begins)
+		STORE 	XposIndex ;Holds the adress where the dist value will be placed
+		LOAD 	CELL
+		ISTORE	XposIndex 
+		RETURN
+
 
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
@@ -186,66 +191,143 @@ DistanceCheck:
 FindAndTagClosestObject:
 
 		; Call method to get information about the closest object
-		CALL	FindClosestObject	
+		CALL	FindClosestObject
 		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist
 		; TODO bounds check on the closest object (just in case?!?)
-		
-		; Figure out which direction to move in to get to the object (+/- x)
-		JUMP	CheckPositive
-	
-	; Check if we need to go in +x to get to the object
-	CheckPositive:
-		; Load our position
-		IN		XPOS
-		SUB		ObjectXDist
-		JPOS	CheckNegative
-		
-		; We want to go in +x
-		IN		FMID
-		STORE 	TagVelocity
-		JUMP	MoveTowardObject
-	
-	; Check if we need to go in -x to get to the object
-	CheckNegative:
-		; FIXME safe to do the check again here (?)
-		; We want to go in -x
-		IN		RMID
-		STORE 	TagVelocity
-		JUMP	MoveTowardObject
-	
+
 	; Go toward the object until we hit the y distance
 	MoveTowardObject:
-	
+
+		; Do the bounds check
+		LOAD 	XPOS
+		SUB 	ObjectXDist
+		JNEG	GoUp
+		JZERO 	AtObjectX
+		JPOS	GoDown
+
+	GoUp:
+		LOAD 	ONE
+		STORE 	XDir
+		JUMP 	MoveLoop
+
+	GoDown:
+		LOAD 	ZERO
+		STORE 	XDir
+
+	MoveLoop:
 		; Update the map with the current sensor readings
 		CALL 	UpdateMap
 		
-		; TODO bounds check
-		
-		; Keep going +/- as we have not hit the max limit for the wall
-		; FIXME tweak the speeds
-		LOAD	TagVelocity
+		; Do the bounds check for real
+		LOAD XDir
+		JZERO CheckLess
+		JPOS CheckGreat
+
+	CheckGreat:
+		LOAD	XPOS
+		SUB		ObjectXDist
+		JZERO 	AtObjectX
+		JPOS	AtObjectX
+		JUMP	KeepGoing
+
+	CheckLess:
+		LOAD	XPOS
+		SUB		ObjectXDist
+		JZERO 	AtObjectX
+		JNEG	AtObjectX
+		JUMP	KeepGoing
+
+	KeepGoing:
+		LOAD	FMid
 		OUT		LVELCMD
 		OUT		RVELCMD
-		
-		; Keep looping
-		JUMP	MoveTowardObject
-		
+		JUMP	MoveLoop
+
 	AtObjectX:
 		; TODO turn for Randy's tagging
 		; TODO call Randy's tag method
 		; TODO return to home
-	
+
+		; Stop the robot
+		LOAD	ZERO
+		OUT		LVELCMD
+		OUT		RVELCMD
+
 		; Return to main
 		RETURN
-		
+
+
+;Goes to middle and searches for object to go towards
+Middle:			DW 2090
+GoToMiddleSearch:
+
+	;Check if robot is at middle yet
+	CheckIfMiddle:
+		CALL 	UpdateMap
+		LOAD 	XPOS
+		ADD 	-2090
+		JNEG 	NotAtMiddle
+		JUMP 	AtMiddle
+
+	;Robot Moves Forward if Not at middle yet
+	NotAtMiddle:
+		LOAD	FMid
+		OUT		LVELCMD
+		OUT		RVELCMD
+		JUMP  CheckIfMiddle
+
+;Deals with robot rotation at middle position
+AtMiddle:
+	LOAD	ZERO
+	OUT		LVELCMD
+	OUT		RVELCMD
+
+	LOAD	MASK2
+	OUT		SONAREN
+	LOAD	MASK3
+	OUT		SONAREN
+
+	;Check if sensor 2 detects an Object
+	CheckMidObj:
+		CALL 	UpdateMap
+		LOAD	DIST2
+		ADDI	-915
+		JNEG	TwoGot
+		JUMP	Rotate10
+
+	;Given sensor 2 found an object, Check if sensor 3 detects an Object
+	TwoGot:
+		LOAD	ONE
+		LOAD	DIST3
+		ADDI	-915
+		JNEG	ThreeGot
+		JUMP	Rotate10
+
+	;Given sensor 2 and 3 found an object, handle remaining action
+	ThreeGot:
+		LOAD	ZERO
+		OUT		LVELCMD
+		OUT		RVELCMD
+		;Temporarily
+		JUMP	ThreeGot
+
+	;Rotates 12 degrees if object was not in front of object based on s2 and s3
+	Rotate10:
+		LOAD 	ZERO
+		ADDI 	12
+		STORE   Angle
+		JUMP	Rotate
+		JUMP	CheckMidObj
+
+
 ; Finds the closest object (relative to the wall) based on the map
 FindClosestObject:
-	; TODO
-	LOAD	ZERO
+	; TODO CHECKME
+	LOAD	CELL
 	STORE	ObjectXDist
 	STORE	ObjectYDist
 	RETURN
-		
+
 ; We are back at home now
 BackAtHome:
 	; TODO wait for user input to start again
@@ -264,13 +346,13 @@ TagIt:
 	IN 		DIST2
 	ADDI	-310
 	JNEG 	TagHit
-	
+
 	IN 		DIST3
 	ADDI 	-310
 	JNEG 	TagHit
-	
+
 	JUMP 	TagIt
-	
+
 ; Tag/Hit object
 TagHit:
 	JUMP 	Die
@@ -284,7 +366,7 @@ TestTag:
 	LOAD 	MASK4
 	OR 		MASK1
 	OUT 	SONAREN
-	
+
 	IN 		DIST4
 	ADDI	-610 ;2 feet
 	JNEG 	Tag1
@@ -320,12 +402,12 @@ Die:
 	OUT    SONAREN
 	LOAD   DEAD         ; An indication that we are dead
 	OUT    SSEG2        ; "dEAd" on the LEDs
-	
+
 	; Our version of HALT
 	Forever:
 		JUMP   Forever      ; Do this forever.
 		DEAD:  DW &HDEAD    ; Example of a "local" variable
-	
+
 ;**************************************************
 ; Helper Subroutines
 ;**************************************************
@@ -337,7 +419,7 @@ ShortBeep:
 	LOADI	1
 	STORE	WaitTime
 	OUT		Timer
-	
+
 	BeepLoop:
 		IN 		Timer
 		SUB 	WaitTime
@@ -352,33 +434,33 @@ Mod360:
 	JNEG	M360N
 	ADDI 	-360
 	JUMP 	Mod360
-	
+
 	M360N:
 		ADDI 	360
 		JNEG 	M360N
 		RETURN
 
-; Rotate X degrees
+; Rotate X degrees. Store X in the var Angle
 Rotate:
 		STORE	Temp
-		
+
 		; Calculate Threshold Values
 		IN 		THETA
 		ADD 	Angle
 		SUB 	ErrMargin
 		CALL 	Mod360
 		STORE 	LowErr
-	
+
 		IN 		THETA
 		ADD 	Angle
 		ADD 	ErrMargin
 		CALL 	Mod360
 		STORE 	HighErr
-		
+
 		; Check rotation direction
 		LOAD 	Angle
 		JNEG 	RotateCW ; else RotateCC
-		
+
 	; Rotate CounterClock
 	RotateCC:
 		LOAD 	FSlow
@@ -393,7 +475,7 @@ Rotate:
 		SUB  	LowErr
 		JNEG	RotateCC
 		JUMP 	RotateEnd
-		
+
 	RotateCW:
 		LOAD 	RSlow
 		OUT		RVELCMD
@@ -406,7 +488,7 @@ Rotate:
 		IN 		THETA
 		SUB  	LowErr
 		JNEG	RotateCW
-		
+
 	RotateEnd:
 	; Stop movement and return
 		LOAD 	ZERO
@@ -436,7 +518,7 @@ SetupI2C:
 	OUT    I2C_RDY     ; start the communication
 	CALL   BlockI2C    ; wait for it to finish
 	RETURN
-	
+
 ; Subroutine to block until I2C device is idle
 BlockI2C:
 	LOAD   Zero
@@ -455,7 +537,7 @@ I2CError:
 	OUT    SSEG1
 	OUT    SSEG2       ; display error message
 	JUMP   I2CError
-	
+
 ; This subroutine will get the battery voltage,
 ; and stop program execution if it is too low.
 ; SetupI2C must be executed prior to this.
@@ -508,6 +590,7 @@ Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
 ErrMargin: 			DW 4
+XDir:				DW 0	; Direction on the X access robot is moving
 ObjectXDist:		DW 0 	; The x position of the next closest object
 ObjectYDist:		DW 0	; The absolute value of the y position of the next closest object
 AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
@@ -515,7 +598,9 @@ ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a pos
 TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
 Cell: 				DW &H7FFF	; Initialize cell value
 ObjLoc:				DW 0	 	; Stores the location of the object to be tagged
-
+CellCount:  		DW 0 		; How many values in the occupancy array
+CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
+XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
 
 ;***************************************************************
 ;* Constants
@@ -564,7 +649,6 @@ FFast:    DW 500       ; 500 is almost max speed (511 is max)
 RFast:    DW -500
 MaxLong:	DW 2931	   	; 12 ft - 2ft (for home and robot) = 10ft = 3048 mm =~ 2900 increments in position
 MaxShort:	DW 1740		; 8ft - 2ft (for home and robot) = 6ft = 1740 mm =~ 1740 increments in position
-
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
 I2CWCmd:  DW &H1190    ; write one i2c byte, read one byte, addr 0x90
 I2CRCmd:  DW &H0190    ; write nothing, read one byte, addr 0x90
@@ -611,3 +695,11 @@ THETA:    EQU &HC2  ; Current rotational position of robot (0-359)
 RESETPOS: EQU &HC3  ; write anything here to reset odometry to 0
 RIN:      EQU &HC8
 LIN:      EQU &HC9
+;***************************************************************
+;* Allocate space in memory for our x and y arrays 
+;* and our temporary array which will be used to estimate the distance by averaging a number of values
+;* The x-array will inititialize at a location sufficiently far away from other instructions
+;* Allows for dynamic length and known locations of words
+;***************************************************************
+		 ORG     &H44C ; Start at location 1100 for the occupancy array
+OcArray: DW &H7FFF		 
