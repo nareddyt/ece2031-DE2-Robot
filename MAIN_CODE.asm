@@ -659,6 +659,10 @@ ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a pos
 TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
 Cell: 				DW 300	; Initialize cell value
 ObjLoc:				DW 300	 ; Stores the location of the object to be tagged
+CellCount:  		DW 0 		; How many values in the occupancy array
+CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
+XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
+
 
 
 ;***************************************************************
@@ -755,3 +759,11 @@ THETA:    EQU &HC2  ; Current rotational position of robot (0-359)
 RESETPOS: EQU &HC3  ; write anything here to reset odometry to 0
 RIN:      EQU &HC8
 LIN:      EQU &HC9
+;***************************************************************
+;* Allocate space in memory for our x and y arrays 
+;* and our temporary array which will be used to estimate the distance by averaging a number of values
+;* The x-array will inititialize at a location sufficiently far away from other instructions
+;* Allows for dynamic length and known locations of words
+;***************************************************************
+		 ORG     &H44C ; Start at location 1100 for the occupancy array
+OcArray: DW &H7FFF	
