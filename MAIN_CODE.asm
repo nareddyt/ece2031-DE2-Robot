@@ -339,66 +339,72 @@ FindClosestObject:
 ; We are back at home now
 BackAtHome:
 	; TODO wait for user input to start again
+	; For now just call die
+	CALL 	Die
 	RETURN
 
-; Tag object
+; GoHome function will have the robot go home after tagging
+; Assumes DE2Bot is facing a wall and there is a clear straight path to wall
+GoHome:
+	; Go towards wall then stop when close
+	CALL 	GoToWall
+	; Determine which way to rotate
+	LOADI 	90
+	STORE 	Angle
+	LOAD 	ObjectsPosTheta
+	JZERO 	HomeRotate
+	LOADI 	-90
+	STORE 	Angle
+HomeRotate:
+	; Rotate to face wall then go home
+	CALL  	Rotate
+	CALL 	GoToWall
+	JUMP 	BackAtHome
+
+; Tag function will travel to an object X distance away, tag it, and rotate to face the wall
+; Assumes DE2Bot is facing object and there is a clear, linear path to object
 Tag:
+	; Saves whatever is in AC
 	STORE 	Temp
+	; Update EncoderY (initial value)
+	IN   	YPOS
+	STORE 	EncoderY
+	; Control Movement Variables
+	LOADI 	THETA
+	STORE 	DTheta
+	LOAD 	FMid
+	STORE 	DVel
 TagIt:
-	LOAD 	FMid
-	OUT 	LVELCMD
-	OUT 	RVELCMD
-	LOAD 	MASK2
-	OR 		MASK3
-	OUT 	SONAREN
-	IN 		DIST2
-	ADDI	-310
-	JNEG 	TagHit
-
-	IN 		DIST3
-	ADDI 	-310
-	JNEG 	TagHit
-
-	JUMP 	TagIt
-
-; Tag/Hit object
-TagHit:
-	JUMP 	Die
-    LOAD 	FSlow
-	LOAD 	Temp ; TODO
-	JUMP 	TagHit
-	RETURN
-
-; Test Object Tagging
-TestTag:
-	LOAD 	MASK4
-	OR 		MASK1
-	OUT 	SONAREN
-
-	IN 		DIST4
-	ADDI	-610 ;2 feet
-	JNEG 	Tag1
-	IN 		DIST1
-	ADDI	-610 ;2 feet
-	JNEG 	Tag2
-
-	LOAD 	FMid
-	OUT 	LVELCMD
-	OUT 	RVELCMD
-	JUMP 	TestTag
-Tag1:
-	LOADI 	-40
-	STORE 	Angle
+	; Move robot
+	CALL 	ControlMovement
+	; Check distance traveled
+	; Subtract initial EncoderY Pos, Cell Dist, and error margin
+	IN 		YPOS
+	CALL 	Abs
+	SUB 	EncoderY
+	SUB 	Cell
+	ADDI 	-10
+	JNEG 	TagIt
+	; Prepare to move backwards a little
+	; Update EncoderY and Control Movement
+	IN 		YPOS
+	CALL 	Abs
+	ADDI 	-30
+	STORE 	EncoderY
+	LOAD 	RMid
+	STORE 	DVel
+MoveBack:
+	; Move backwards a little
+	CALL ControlMovement
+	; Check distance
+	IN 		YPOS
+	CALL 	Abs
+	SUB 	EncoderY
+	JPOS 	MoveBack
+	; Rotate 180 and GoHome
+	LOADI 	180
 	CALL 	Rotate
-	CALL 	Tag
-	CALL 	Die
-Tag2:
-	LOADI 	40
-	STORE 	Angle
-	CALL 	Rotate
-	CALL 	Tag
-	CALL 	Die
-
+	CALL 	GoHome
 
 ; Sometimes it's useful to permanently stop execution.
 ; This will also catch the execution if it accidentally
@@ -419,6 +425,13 @@ Die:
 ;**************************************************
 ; Helper Subroutines
 ;**************************************************
+
+; Stops robot movement
+StopMovement:
+	LOAD 	ZERO
+	OUT 	LVELCMD
+	OUT 	RVELCMD
+	RETURN
 
 ShortBeep:
 	STORE	Temp
@@ -451,20 +464,19 @@ Mod360:
 ; Rotate X degrees. Store X in the var Angle
 Rotate:
 		STORE	Temp
-
 		; Calculate Threshold Values
+		; Calculate Lower Error Margin
 		IN 		THETA
 		ADD 	Angle
 		SUB 	ErrMargin
 		CALL 	Mod360
 		STORE 	LowErr
-
+		; Calculate High Error Margin
 		IN 		THETA
 		ADD 	Angle
 		ADD 	ErrMargin
 		CALL 	Mod360
 		STORE 	HighErr
-
 		; Check rotation direction
 		LOAD 	Angle
 		JNEG 	RotateCW ; else RotateCC
@@ -483,7 +495,7 @@ Rotate:
 		SUB  	LowErr
 		JNEG	RotateCC
 		JUMP 	RotateEnd
-
+	; Rotate Clockwise
 	RotateCW:
 		LOAD 	RSlow
 		OUT		RVELCMD
@@ -496,14 +508,34 @@ Rotate:
 		IN 		THETA
 		SUB  	LowErr
 		JNEG	RotateCW
-
 	RotateEnd:
 	; Stop movement and return
-		LOAD 	ZERO
-		OUT 	LVELCMD
-		OUT 	RVELCMD
+		CALL 	StopMovement
 		LOAD 	Temp
 		RETURN
+
+; Function tells DE2Bot to travel straight until wall is detected
+; Uses sensors 2 and 3 to detect wall
+GoToWall:
+	; Initialize sensors
+	LOAD 	MASK2
+	OR 		MASK3
+	OUT 	SONAREN
+	; Initialize movement variables
+	IN  	THETA
+	STORE 	DTheta
+	LOAD 	FMid
+	STORE 	DVel
+CheckWall:
+	CALL ControlMovement
+	; Check if distance is lower than threshold
+	IN 		DIST2
+	ADD 	WallThresh 	; 20 cm ~= 8 inches
+	JPOS 	CheckWall
+	IN 		DIST3
+	ADD 	WallThresh 	; 20 cm ~= 8 inches
+	JPOS 	CheckWall
+	CALL 	StopMovement 	; stops movement
 
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
@@ -664,12 +696,13 @@ ObjectYDist:		DW 0	; The absolute value of the y position of the next closest ob
 AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
 ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a positive angle to tag objects
 TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
+EncoderY: 			DW 0		; Stores current value of encoder in Y direction
+WallThresh: 		DW -200 	; Defines distance away from wall before DE2Bot should stop moving (used in GoHome function)
 Cell: 				DW 300	; Initialize cell value
 ObjLoc:				DW 300	 ; Stores the location of the object to be tagged
 CellCount:  		DW 0 		; How many values in the occupancy array
 CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
-
 
 
 ;***************************************************************
