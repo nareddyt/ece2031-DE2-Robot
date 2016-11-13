@@ -183,7 +183,7 @@ UpdateMap:
 		ADDI	CellArrI ;Add the value of starting address (where the memory for array begins)
 		STORE 	XposIndex ;Holds the adress where the dist value will be placed
 		LOAD 	CELL
-		ISTORE	XposIndex 
+		ISTORE	XposIndex
 		RETURN
 
 ;Subroutine that filters the array created in update map
@@ -196,7 +196,7 @@ filterArray:
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
 ; Then returns back home, retracing its path
-FindAndTagClosestObject: 
+FindAndTagClosestObject:
 
 		; Call method to get information about the closest object
 		CALL	FindClosestObject
@@ -206,22 +206,25 @@ FindAndTagClosestObject:
 	; Go toward the object until we hit the y distance
 	MoveTowardObject:
 
-		; Do the bounds check
+		;Checks where robot is relative to position to start
 		LOAD 	XPOS
 		SUB 	ObjectXDist
 		JNEG	GoUp
-		JZERO 	AtObjectX
+		JZERO AtObjectX
 		JPOS	GoDown
 
+	;Robot has to go up the X axis do XDir is stored as 1
 	GoUp:
 		LOAD 	ONE
 		STORE 	XDir
 		JUMP 	MoveLoop
 
+	;Robot has to go up the X axis do XDir is stored as 0
 	GoDown:
 		LOAD 	ZERO
 		STORE 	XDir
 
+	;Decides which check to perform base don XDir value
 	MoveLoop:
 		; Update the map with the current sensor readings
 		CALL 	UpdateMap
@@ -231,6 +234,7 @@ FindAndTagClosestObject:
 		JZERO CheckLess
 		JPOS CheckGreat
 
+	;If robot was before desired positon on X axis at start
 	CheckGreat:
 		LOAD	XPOS
 		SUB		ObjectXDist
@@ -238,6 +242,7 @@ FindAndTagClosestObject:
 		JPOS	AtObjectX
 		JUMP	KeepGoing
 
+	;If robot was after desired positon on X axis at start
 	CheckLess:
 		LOAD	XPOS
 		SUB		ObjectXDist
@@ -245,6 +250,7 @@ FindAndTagClosestObject:
 		JNEG	AtObjectX
 		JUMP	KeepGoing
 
+	;If robot is not yet at desired X position
 	KeepGoing:
 		LOAD	FMid
 		OUT		LVELCMD
@@ -800,10 +806,10 @@ RESETPOS: EQU &HC3  ; write anything here to reset odometry to 0
 RIN:      EQU &HC8
 LIN:      EQU &HC9
 ;***************************************************************
-;* Allocate space in memory for our x and y arrays 
+;* Allocate space in memory for our x and y arrays
 ;* and our temporary array which will be used to estimate the distance by averaging a number of values
 ;* The x-array will inititialize at a location sufficiently far away from other instructions
 ;* Allows for dynamic length and known locations of words
 ;***************************************************************
 		 ORG     &H44C ; Start at location 1100 for the occupancy array
-OcArray: DW &H7FFF	
+OcArray: DW &H7FFF
