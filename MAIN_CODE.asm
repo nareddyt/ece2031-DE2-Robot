@@ -193,6 +193,25 @@ filterArray:
 	;Account for one object being behind another
 	Return
 
+				Ang0:		DW 90
+				Ang1:		DW 44
+				Ang2:		DW 12
+				Ang3:		DW -12
+				Ang4:		DW -44
+				Ang5:		DW -90
+				Ang6:		DW -144
+				Ang7:		DW 144
+
+SensorToCheck: 	DW 0
+SensorAngle:		DW 0
+
+SensorDist: 		DW 0
+
+SensorIndex: 		DW 0
+
+SensorUpdate:
+	; TODO: Update Array based on Sensor to Check
+
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
 ; Then returns back home, retracing its path
