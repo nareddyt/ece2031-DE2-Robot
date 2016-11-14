@@ -186,20 +186,23 @@ InitialSearch:
 
 UpdateMap:
 	; Traverse an axis,and store the distance recieved (represents 32mm increment)
- 	LOAD 	AlongLongWall
-	JPOS 	LGO ; If no switches active, robot setup values for long axis traverse
-	JZERO  	SGO ; If SW0 active, robot setup values for short axis traverse
+	LOAD	AlongLongWall
+ 	XOR 	XDir
+	JPOS 	ELHS ; If bot is moving right, turn on sensors on the left side
+	JZERO  	ERHS ; Same, but converse
 
 	; FIXME turn on sensors based on which axis it is on AND the var XDir
-	
-	LGO:
+		
+	ERHS:
+		;Enable sensors on right hand side of bot
 	 	LOAD	MASK5
 	 	OUT 	SONAREN
 	 	IN 		DIST5 ;Turn on and read value from sensor 5
 		CALL	CellIn ; If value read in less than the value already in cell, store it in cell
 	 	RETURN
 
-	SGO:
+	ELHS:
+		;Enable sensors on right hand side of bot
 		LOAD	MASK0
 		OUT 	SONAREN
 		IN 		DIST0
@@ -215,6 +218,7 @@ UpdateMap:
 		STORE 	XposIndex ;Holds the adress where the dist value will be placed
 		LOAD 	CELL
 		ISTORE	XposIndex
+		CALL	KillSonars
 		RETURN
 
 ;Subroutine that filters the array created in update map
@@ -480,7 +484,12 @@ SensorUpdate:		DW 0
 ;**************************************************
 ; Helper Subroutines
 ;**************************************************
-
+KillSonars:
+	;stop all sensors
+	LOAD	ZERO
+	OUT		SONAREN
+	RETURN
+	
 ; Stops robot movement
 StopMovement:
 	LOAD 	ZERO
