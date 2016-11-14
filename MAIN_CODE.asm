@@ -351,7 +351,7 @@ GoHome:
 	; Determine which way to rotate
 	LOADI 	90
 	STORE 	Angle
-	LOAD 	ObjectsPosTheta
+	LOAD 	AlongLongWall
 	JZERO 	HomeRotate
 	LOADI 	-90
 	STORE 	Angle
@@ -382,7 +382,7 @@ TagIt:
 	IN 		YPOS
 	CALL 	Abs
 	SUB 	EncoderY
-	SUB 	Cell
+	SUB 	ObjectYDist
 	ADDI 	-10
 	JNEG 	TagIt
 	; Prepare to move backwards a little
