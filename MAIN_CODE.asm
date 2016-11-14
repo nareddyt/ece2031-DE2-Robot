@@ -59,10 +59,16 @@ Main:
 	
 	; Reset odometer in case wheels move after programming
 	OUT 	RESETPOS	
+	
+	; Initilize all the vars
 	CALL	InitializeVars
+	CALL	InitializeMap
+	
+	; Start the initial search
 	CALL	InitialSearch
 
 	; TODO we need some way to keep track of the number of objects left
+	; OR we could do it based on use input
 	; while (numObjects > 0) { call FindAndTagClosestObject }
 	CALL	FindAndTagClosestObject
 	; Reset odometer in case wheels move after programming
@@ -84,9 +90,9 @@ Die:
 		JUMP   Forever      ; Do this forever.
 		DEAD:  DW &HDEAD    ; Example of a "local" variable
 		
-; =================== ;
+; ------------------- ;
 ; END OF CONTROL FLOW ;
-; =================== ;
+; ------------------- ;
 
 ;**************************************************
 ; Important Subroutines
@@ -109,13 +115,17 @@ InitializeVars:
 		
 	ZeroThetaLoad:
 		LOAD	ZERO
-		JUMP ThetaStore
+		JUMP 	ThetaStore
 		
 	ThetaStore:
 		STORE	ObjectsPosTheta
 	
 		; Return!
 		RETURN
+		
+InitializeMap:
+	; TODO
+	DW 0
 
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
@@ -124,7 +134,8 @@ InitialSearch:
 		; TODO do this with interrupts instead of just checking every loop cycle
 		LOAD	MASK2
 		ADD		MASK3
-		OUT 	SONAREN
+		; TODO uncomment when we actually code for this and disable at the end
+		; OUT 	SONAREN
 
 	; Go forward until we are at the end of the edge
 	KeepGoingForward:
@@ -184,51 +195,78 @@ InitialSearch:
 		; Return to main
 		RETURN
 
+; Updates the "map" with current readings from the corresponding ultrasonic sensors
+; Uses basic thresholding, filtering, and data aggregation techniques
 UpdateMap:
-	; Traverse an axis,and store the distance recieved (represents 32mm increment)
-	LOAD	AlongLongWall
+ 	LOAD 	AlongLongWall
  	XOR 	XDir
-	JPOS 	ELHS ; If bot is moving right, turn on sensors on the left side
-	JZERO  	ERHS ; Same, but converse
-
-	; FIXME turn on sensors based on which axis it is on AND the var XDir
-		
+	JPOS 	ELHS ; If 1, robot is set up for long axis traversal
+	JZERO  	ERHS ; If 0, robot setup values for short axis traverse
+	
+	; Sonar sensor 5 is facing the objects, so turn it on and read it's value
 	ERHS:
-		;Enable sensors on right hand side of bot
+		; Read value from the sonar sensor and store in Cell
 	 	LOAD	MASK5
 	 	OUT 	SONAREN
-	 	IN 		DIST5 ;Turn on and read value from sensor 5
-		CALL	CellIn ; If value read in less than the value already in cell, store it in cell
+	 	IN 		DIST5
+	 	STORE	Cell
+	 	
+	 	; Disable the sonar sensor
+	 	; FIXME disables 2 and 3 as well
+	 	CALL	KillSonars
+	 	
+	 	; Update the value in the cell and return!
+		CALL	UpdateCell
 	 	RETURN
 
+	; Sonar sensor 0 is facing the objects, so turn it on and read it's value
 	ELHS:
-		;Enable sensors on right hand side of bot
+		; Read value from the sonar sensor and store in Cell
 		LOAD	MASK0
 		OUT 	SONAREN
 		IN 		DIST0
-	 	CALL	CellIn ; If value read in less than the value already in cell, store it in cell
+		STORE	Cell
+	 	
+	 	; Disable the sonar sensor
+	 	; FIXME disables 2 and 3 as well
+	 	CALL	KillSonars
+	 	
+	 	; Update the value in the cell and return!
+	 	CALL	UpdateCell
 		RETURN
 
-	CellIn:
-	; Store value of cell into memory adress pointed to by XposIndex
-		STORE 	Cell ;store current distance read in cell
-	 	IN		XPOS ;Take in xposition
-		SHIFT 	five ;Index value of the array (applies same dist value cells of length 32 increments)
-		ADDI	CellArrI ;Add the value of starting address (where the memory for array begins)
-		STORE 	XposIndex ;Holds the adress where the dist value will be placed
-		LOAD 	CELL
-		ISTORE	XposIndex
-		CALL	KillSonars
-		RETURN
+; Update the cell in the array based on the value stored at cell and the current position of the robot
+; Filtering and thresholding happens here! 
+UpdateCell:
+
+	; Read the current x pos of the robot
+ 	IN		XPOS
+ 	
+ 	; CHECKME Divide the x position by 32 (shift by 5) to get the current cell in the array
+	SHIFT 	NEGFIVE
+	
+	; Add the value of the starting index of the array. This maps us to the proper index for the corresponding x position
+	ADD		CellArrI
+	
+	; We now have the address of the corresponding cell. Store it in a temp variable
+	STORE 	XposIndex
+	
+	; Do the filtering and aggregation
+	CALL	FilterAndAggregate
+	
+	; Return!
+	RETURN
 
 ;Subroutine that filters the array created in update map
-FilterArray:
+FilterAndAggregate:
 	;TODO not every cell in the array will have a reading, we need to figure how to filter the readings to produce continuous object
 	;Account for two object being at the same distance away from wall
 	;Account for one object being behind another
 	RETURN
 	
 ; Finds the closest object (relative to the wall) based on the map
+; Stores the x pos of the closest object in ObjectXDist
+; Stores the y pos of the closest object in ObjectYDist
 FindClosestObject:
 	; TODO traverse through the array and get the xPos for the closest object
 	; TODO store in ObjectXDist, store distance in ObjectYDist
@@ -244,8 +282,9 @@ FindAndTagClosestObject:
 
 		; Call method to get information about the closest object
 		CALL	FindClosestObject
-		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist
-		; TODO bounds check on the closest object (just in case?!?)
+		
+		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist!
+		; We need to move to the xPos
 
 	; Go toward the object until we hit the x distance
 	MoveTowardObject:
@@ -798,135 +837,7 @@ GetBattLvl:
 ; using Taylor series -- will be accurate between -pi/2 and pi/2
 
 ; NEED MULT16S, lowbyte DW &HFF, DIV16S, neg
-COSINE:
-		LOAD	THETA
-		STORE 	TCOPY
-		LOAD 	THETA
-		ADDI 	-180
-		JNEG 	NEGSINE			; if THETA is in third or fourth quadrant, sine value will be output as negative
-		ADDI	180
-		ADDI 	-90
-		JPOS	QUAD2
-		ADDI	90
-THETAQUAD2:
-THETANEGSINE:
-		LOAD 	THETA
-		STORE 	m16sA
-		STORE 	m16sB
-		CALL	Mult16s
-		LOAD    mres16sH
-		SHIFT   8            ; move high word of result up 8 bits
-		STORE   mres16sH
-		LOAD    mres16sL
-		SHIFT   -8           ; move low word of result down 8 bits
-		AND     LowByte
-		OR      mres16sH     ; combine high and low words of result
-		STORE	THETAtemp2	 ; equivalent to THETA ^ 2
-		STORE	THETA2
-		SHIFT	-1			 ; divide by 2
-		CALL 	Neg
-		STORE	THETA2
-		
-		LOAD 	THETAtemp
-		STORE 	m16sA
-		STORE 	m16sB
-		CALL	Mult16s
-		LOAD    mres16sH
-		SHIFT   8            ; move high word of result up 8 bits
-		STORE   mres16sH
-		LOAD    mres16sL
-		SHIFT   -8           ; move low word of result down 8 bits
-		AND     LowByte
-		OR      mres16sH     ; combine high and low words of resultv
-		STORE 	THETAtemp4	 ; equivalent to THETA ^ 4
-		STORE 	THETA4
-		
-		LOADI 	2
-		SHIFT	5			 ; immediate of 2 ^ 5 = 32
-		ADDI 	-8			 ; 32 - 8 = 24
-		STORE 	d16sD
-		LOAD 	THETA4
-		STORE 	d16sN
-		CALL	Div16s
-		LOAD	dres16sQ
-		STORE 	THETA4
-		
-		LOAD 	THETAtemp4	 ; performing THETA^6
-		STORE 	m16sA
-		LOAD	THETAtemp2
-		STORE 	m16sB
-		CALL	Mult16s
-		LOAD    mres16sH
-		SHIFT   8            ; move high word of result up 8 bits
-		STORE   mres16sH
-		LOAD    mres16sL
-		SHIFT   -8           ; move low word of result down 8 bits
-		AND     LowByte
-		OR      mres16sH     ; combine high and low words of result
-		STORE	THETA6		 ; equivalent to THETA ^ 6
-		
-		LOADI	2
-		SHIFT	10			 ; immediate of 1024
-		ADDI	-304		 ; 1024 - 304 = 720
-		LOAD 	d16sD
-		LOAD 	THETA6
-		STORE 	d16sN
-		CALL	Div16s
-		LOAD	dres16sQ
-		Call	Neg
-		STORE 	THETA6
-		
-		LOADI	1
-		ADD		THETA2
-		ADD 	THETA4
-		ADD		THETA6
-		STORE	x_val
-		
-		LOAD 	TCOPY
-		ADDI	-180
-		JPOS	NEGYVAL
-		
-		STORE	x_val
-		RETURN	
-		
-NEGYVAL:	
-		LOAD 	x_val
-		CALL	Neg			; negate x_val if in quadrants III o IV
-		STORE 	x_val
-		RETURN
-		
-QUAD2:	
-		LOAD 	THETA
-		ADDI	-90
-		J		THETAQUAD2		
-		
-NEGSINE:
-		LOADI	360
-		SUB		THETA
-		J THETANEGSINE
-		
-		
-; Subroutine for SINE function
-; input: distance from the object (DISTX) <based on the sonar being used, THETA
-	; sin(theta) = O/H = x_val/DISTX
-; output: y_val
-; NEEDED: COSINE
-
-SINE:
-		LOAD	THETA
-		ADDI	-90		; finding other angle
- 		CALL 	COSINE
-		LOAD 	x_val
-		STORE 	y_val	; by finding the cosine of the other angle, the sine of the original triangle can be found
-	
-		STORE 	d16sN
-		LOAD  	DISTX
-		STORE 	d16sN
-		CALL	Div16s
-		LOAD	dres16sQ
-		STORE 	y_val
-		RETURN
-	
+; TODO removed cause errors :(	
 
 ;***************************************************************
 ;* Variables
@@ -945,7 +856,7 @@ ObjectsPosTheta:	DW 0		; Boolean that signifies if the robot has to turn in a po
 TagVelocity:		DW 0		; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
 EncoderY: 			DW 0		; Stores current value of encoder in Y direction
 WallThresh: 		DW -200 	; Defines distance away from wall before DE2Bot should stop moving (used in GoHome function)
-Cell: 				DW 300		; Initialize cell value
+Cell: 				DW 0		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
 CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
@@ -953,10 +864,10 @@ XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
 y_val:			DW 0 
 THETAtemp2:		DW 0 
 THETAtemp4:		DW 0
-THETA2 :		DW 0 
-THETA4 :		DW 0
-THETA6 :		DW 0 
-TCOPY  :		DW 0
+THETA2:			DW 0 
+THETA4:			DW 0
+THETA6:			DW 0 
+TCOPY:			DW 0
 CosSum:			DW 0
 
 
@@ -964,18 +875,19 @@ CosSum:			DW 0
 ;* Constants
 ;* (though there is nothing stopping you from writing to these)
 ;***************************************************************
-NegOne:   DW -1
-Zero:     DW 0
-One:      DW 1
-Two:      DW 2
-Three:    DW 3
-Four:     DW 4
-Five:     DW 5
-Six:      DW 6
-Seven:    DW 7
-Eight:    DW 8
-Nine:     DW 9
-Ten:      DW 10
+NegFive:	DW -5
+NegOne:   	DW -1
+Zero:     	DW 0
+One:      	DW 1
+Two:      	DW 2
+Three:    	DW 3
+Four:     	DW 4
+Five:     	DW 5
+Six:      	DW 6
+Seven:    	DW 7
+Eight:    	DW 8
+Nine:     	DW 9
+Ten:      	DW 10
 
 ; Some bit masks.
 ; Masks of multiple bits can be constructed by ORing these
