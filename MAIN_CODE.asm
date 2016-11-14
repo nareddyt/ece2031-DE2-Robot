@@ -60,17 +60,20 @@ Main:
 	; Reset odometer in case wheels move after programming
 	OUT 	RESETPOS	
 	
+	; Initilize all the vars
+	CALL	InitializeVars
+	CALL	InitializeMap
+	
 	;*****************************
 	; TEST CODE BEGIN (will delete later)
 	;*****************************
-	; Test if ControlMovement moves in a straight line
-	; Also test if we can turn while moving instead of rotating in place
-	
-	
 	; Test Tagging Function
 	; Robot should travel a distance specified, then retrace steps and go back home
 	LOADI 	610 ; Assume a certain distance
 	STORE 	ObjectYDist ; This variable should have a particular value
+	LOADI 	90
+	STORE 	Angle
+	CALL 	Rotate
 	CALL 	Tag
 	; Test GoHome Function
 	; Tag should call GoHome
@@ -85,10 +88,6 @@ Main:
 	;*****************************
 	; TEST CODE END
 	;*****************************
-	
-	; Initilize all the vars
-	CALL	InitializeVars
-	CALL	InitializeMap
 	
 	; Start the initial search
 	CALL	InitialSearch
@@ -129,23 +128,24 @@ InitializeVars:
 		IN		SWITCHES
 		AND		MASK0
 		STORE 	AlongLongWall
-	
-		; ObjectsPosTheta: Sets var to 1 if the robot must turn in the positive direction to tag objects.
-		; Note: We turn positive if we are along the short edge for the given use case
-		JZERO	PositiveThetaLoad
-		JPOS	ZeroThetaLoad
 		
-	PositiveThetaLoad:
-		LOAD	ONE
-		JUMP	ThetaStore
+		; Initialize global variables based on axis
+		JPOS 	LongWallInit
+		LOADI	90
+		STORE 	TagAng
+		LOADI	270
+		STORE 	WallAng
+		LOADI	180
+		STORE 	HomeAng
+		RETURN
 		
-	ZeroThetaLoad:
-		LOAD	ZERO
-		JUMP 	ThetaStore
-		
-	ThetaStore:
-		STORE	ObjectsPosTheta
-	
+	LongWallInit:
+		LOADI	270
+		STORE 	TagAng
+		LOADI	90
+		STORE 	WallAng
+		LOADI	180
+		STORE 	HomeAng
 		; Return!
 		RETURN
 		
@@ -393,7 +393,7 @@ FindAndTagClosestObject:
 ; We are back at home now
 BackAtHome:
 	; Wait for user input to start again
-	CALL 	Init
+	JUMP 	Init
 	RETURN
 
 ; GoHome function will have the robot go home after tagging
@@ -411,7 +411,7 @@ GoHome:
 HomeRotate:
 	; Rotate to face wall then go home
 	CALL  	Rotate
-	CALL 	GoToWall
+	CALL 	GoToWall2
 	JUMP 	BackAtHome
 
 ; Tag function will travel to an object X distance away, tag it, and rotate to face the wall
@@ -423,7 +423,7 @@ Tag:
 	IN   	YPOS
 	STORE 	EncoderY
 	; Control Movement Variables
-	LOADI 	THETA
+	LOAD 	TagAng
 	STORE 	DTheta
 	LOAD 	FMid
 	STORE 	DVel
@@ -647,13 +647,15 @@ Rotate:
 
 ; Function tells DE2Bot to travel straight until wall is detected
 ; Uses sensors 2 and 3 to detect wall
+; GoToWall travels to the wall with specified angles
+; GoToWall2 travels towards home with a specified angle
 GoToWall:
 	; Initialize sensors
 	LOAD 	MASK2
 	OR 		MASK3
 	OUT 	SONAREN
 	; Initialize movement variables
-	IN  	THETA
+	LOAD  	WallAng
 	STORE 	DTheta
 	LOAD 	FMid
 	STORE 	DVel
@@ -668,6 +670,18 @@ CheckWall:
 	JPOS 	CheckWall
 	CALL 	StopMovement 	; stops movement
 	CALL 	KillSonars
+	RETURN
+GoToWall2:
+	; Initialize sensors
+	LOAD 	MASK2
+	OR 		MASK3
+	OUT 	SONAREN
+	; Initialize movement variables
+	LOAD  	HomeAng
+	STORE 	DTheta
+	LOAD 	FMid
+	STORE 	DVel
+	JUMP 	CheckWall
 
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
@@ -876,7 +890,7 @@ WaitTime:			DW 0
 Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
-ErrMargin: 			DW 4
+ErrMargin: 			DW 5
 XDir:				DW 0		; Current direction on the X access robot is moving. 1 = right, 0 = left
 ObjectXDist:		DW 0 		; The x position of the next closest object
 ObjectYDist:		DW 0		; The absolute value of the y position of the next closest object
@@ -889,6 +903,9 @@ Cell: 				DW 0		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
 CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
+TagAng: 			DW 0		; Tells robot travel ang when tagging
+WallAng:			DW 0		; Tells robot travel ang when going to wall
+HomeAng:			DW 0		; Tells robot travel ang when going home
 
 y_val:			DW 0 
 THETAtemp2:		DW 0 
