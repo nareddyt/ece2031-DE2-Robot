@@ -55,60 +55,126 @@ WaitForUser:
 ; If necessary, put any initialization
 ; data for main here
 Main:
-	OUT 	RESETPOS	; reset odometer in case wheels move after programming
-	; TODO
-
-; Main loop to search begins here
-MainLoop:
+	; TODO initialize array to maxDistance
+	
+	; Reset odometer in case wheels move after programming
+	OUT 	RESETPOS	
+	
+	;*****************************
+	; TEST CODE BEGIN (will delete later)
+	;*****************************
+	; Test if ControlMovement moves in a straight line
+	; Also test if we can turn while moving instead of rotating in place
+	
+	
+	; Test Tagging Function
+	; Robot should travel a distance specified, then retrace steps and go back home
+	LOADI 	610 ; Assume a certain distance
+	STORE 	ObjectYDist ; This variable should have a particular value
+	CALL 	Tag
+	; Test GoHome Function
+	; Tag should call GoHome
+	; Once at home, the robot should go back to Init
+	
+	; Test Alternative GoHome function
+	;LOADI 	610
+	;STORE 	ObjectYDist
+	;CALL  	Tag
+	
+	
+	;*****************************
+	; TEST CODE END
+	;*****************************
+	
+	; Initilize all the vars
 	CALL	InitializeVars
+	CALL	InitializeMap
+	
+	; Start the initial search
 	CALL	InitialSearch
 
 	; TODO we need some way to keep track of the number of objects left
+	; OR we could do it based on use input
 	; while (numObjects > 0) { call FindAndTagClosestObject }
 	CALL	FindAndTagClosestObject
+	; Reset odometer in case wheels move after programming
+	OUT 	RESETPOS
+
+; Sometimes it's useful to permanently stop execution.
+; This will also catch the execution if it accidentally
+; falls through from above.
+Die:
+		LOAD   Zero         ; Stop everything.
+		OUT    LVELCMD
+		OUT    RVELCMD
+		OUT    SONAREN
+		LOAD   DEAD         ; An indication that we are dead
+		OUT    SSEG2        ; "dEAd" on the LEDs
+	
+	; Our version of HALT
+	Forever:
+		JUMP   Forever      ; Do this forever.
+		DEAD:  DW &HDEAD    ; Example of a "local" variable
+		
+; ------------------- ;
+; END OF CONTROL FLOW ;
+; ------------------- ;
 
 ;**************************************************
 ; Important Subroutines
 ;**************************************************
 
 InitializeVars:
-	; SW0 = AlongLongWall --> Sets var to 1 if the robot is travelling along the long wall
-	IN		SWITCHES
-	AND		MASK0
-	STORE 	AlongLongWall
-
-	; SW1 = ObjectsPosTheta --> Sets var to 1 if the robot must turn in the positive direction to tag objects
-	IN		SWITCHES
-	AND		MASK1
-	STORE	ObjectsPosTheta
-
-	; Reset odometer in case wheels move after initialization
-	OUT 	RESETPOS
-
-	; Return!
-	RETURN
+		; SW0 = AlongLongWall --> Sets var to 1 if the robot is travelling along the long wall
+		IN		SWITCHES
+		AND		MASK0
+		STORE 	AlongLongWall
+	
+		; ObjectsPosTheta: Sets var to 1 if the robot must turn in the positive direction to tag objects.
+		; Note: We turn positive if we are along the short edge for the given use case
+		JZERO	PositiveThetaLoad
+		JPOS	ZeroThetaLoad
+		
+	PositiveThetaLoad:
+		LOAD	ONE
+		JUMP	ThetaStore
+		
+	ZeroThetaLoad:
+		LOAD	ZERO
+		JUMP 	ThetaStore
+		
+	ThetaStore:
+		STORE	ObjectsPosTheta
+	
+		; Return!
+		RETURN
+		
+InitializeMap:
+	; TODO
+	DW 0
 
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
-		; TODO change code based on 2 vars
-
+		
 		; Enable sonar sensors 2 and 3 to make sure we don't run into anything
 		; TODO do this with interrupts instead of just checking every loop cycle
 		LOAD	MASK2
 		ADD		MASK3
-		OUT 	SONAREN
+		; TODO uncomment when we actually code for this and disable at the end
+		; OUT 	SONAREN
 
 	; Go forward until we are at the end of the edge
 	KeepGoingForward:
 
 		; Update the map with the current sensor readings
-		; CALL Jeff's code here!
+		; Call Jeff's code here!
 		CALL 	UpdateMap
 
 		; Check the robot has gone too far in the x direction
 		; Note that this distance depends on which wall we are following, stored in AlongLongWall
 		LOAD	AlongLongWall
 		JZERO	LoadShortDistance
+		JPOS	LoadLongDistance
 
 	; We are travelling along the long edge, so check this distance bound
 	LoadLongDistance:
@@ -127,13 +193,13 @@ InitialSearch:
 
 		; TODO Check if we are about to hit an object with the ultrasonic sensors
 		; TODO interrupts instead of checking at each loop?
-		; CHECKME maybe we should aggregate this data as well?
+		; CHECKME maybe we should aggregate this data as well? Should test :/
 
 		; Keep going forward as we have not hit the max limit for the wall
 		; FIXME tweak the speeds
-		IN		THETA
+		LOAD	ZERO
 		STORE	DTheta
-		LOAD	FFast
+		LOAD	FMid
 		STORE	DVel
 		CALL	ControlMovement
 
@@ -155,116 +221,244 @@ InitialSearch:
 		; Return to main
 		RETURN
 
+; Updates the "map" with current readings from the corresponding ultrasonic sensors
+; Uses basic thresholding, filtering, and data aggregation techniques
 UpdateMap:
-	;Traverse an axis,and store the distance recieved (represents 32mm increment)
  	LOAD 	AlongLongWall
-	JPOS 	LGO ; If no switches active, robot setup values for long axis traverse
-	JZERO  	SGO ; If SW0 active, robot setup values for short axis traverse
-
-	LGO:
+ 	XOR 	XDir
+	JPOS 	ELHS ; If 1, robot is set up for long axis traversal
+	JZERO  	ERHS ; If 0, robot setup values for short axis traverse
+	
+	; Sonar sensor 5 is facing the objects, so turn it on and read it's value
+	ERHS:
+		; Read value from the sonar sensor and store in Cell
 	 	LOAD	MASK5
 	 	OUT 	SONAREN
-	 	IN 		DIST5 ;Turn on and read value from sensor 5
-		CALL	CellIn ; If value read in less than the value already in cell, store it in cell
+	 	IN 		DIST5
+	 	STORE	Cell
+	 	
+	 	; Disable the sonar sensor
+	 	; FIXME disables 2 and 3 as well
+	 	CALL	KillSonars
+	 	
+	 	; Update the value in the cell and return!
+		CALL	UpdateCell
 	 	RETURN
 
-	SGO:
+	; Sonar sensor 0 is facing the objects, so turn it on and read it's value
+	ELHS:
+		; Read value from the sonar sensor and store in Cell
 		LOAD	MASK0
 		OUT 	SONAREN
 		IN 		DIST0
-	 	CALL	CellIn ; If value read in less than the value already in cell, store it in cell
+		STORE	Cell
+	 	
+	 	; Disable the sonar sensor
+	 	; FIXME disables 2 and 3 as well
+	 	CALL	KillSonars
+	 	
+	 	; Update the value in the cell and return!
+	 	CALL	UpdateCell
 		RETURN
 
-	CellIn:
-	; Store value of cell into memory adress pointed to by XposIndex
-		STORE 	Cell ;store current distance read in cell
-	 	IN		XPOS ;Take in xposition
-		SHIFT 	five ;Index value of the array (applies same dist value cells of length 32 increments)
-		ADDI	CellArrI ;Add the value of starting address (where the memory for array begins)
-		STORE 	XposIndex ;Holds the adress where the dist value will be placed
-		LOAD 	CELL
-		ISTORE	XposIndex 
-		RETURN
+; Update the cell in the array based on the value stored at cell and the current position of the robot
+; Filtering and thresholding happens here! 
+UpdateCell:
+
+	; Read the current x pos of the robot
+ 	IN		XPOS
+ 	
+ 	; CHECKME Divide the x position by 32 (shift by 5) to get the current cell in the array
+	SHIFT 	NEGFIVE
+	
+	; Add the value of the starting index of the array. This maps us to the proper index for the corresponding x position
+	ADD		CellArrI
+	
+	; We now have the address of the corresponding cell. Store it in a temp variable
+	STORE 	XposIndex
+	
+	; Do the filtering and aggregation
+	CALL	FilterAndAggregate
+	
+	; Return!
+	RETURN
 
 ;Subroutine that filters the array created in update map
-filterArray:
+FilterAndAggregate:
 	;TODO not every cell in the array will have a reading, we need to figure how to filter the readings to produce continuous object
 	;Account for two object being at the same distance away from wall
 	;Account for one object being behind another
-	Return
+	RETURN
+	
+; Finds the closest object (relative to the wall) based on the map
+; Stores the x pos of the closest object in ObjectXDist
+; Stores the y pos of the closest object in ObjectYDist
+FindClosestObject:
+	; TODO traverse through the array and get the xPos for the closest object
+	; TODO store in ObjectXDist, store distance in ObjectYDist
+	LOAD	TEN
+	STORE	ObjectXDist
+	STORE	ObjectYDist
+	RETURN
 
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
 ; Then returns back home, retracing its path
-FindAndTagClosestObject: 
+FindAndTagClosestObject:
 
 		; Call method to get information about the closest object
 		CALL	FindClosestObject
-		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist
-		; TODO bounds check on the closest object (just in case?!?)
+		
+		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist!
+		; We need to move to the xPos
 
-	; Go toward the object until we hit the y distance
+	; Go toward the object until we hit the x distance
 	MoveTowardObject:
 
-		; Do the bounds check
-		LOAD 	XPOS
+		;Checks where robot is relative to position to start
+		IN	 	XPOS
 		SUB 	ObjectXDist
-		JNEG	GoUp
+		JNEG	GoRight
 		JZERO 	AtObjectX
-		JPOS	GoDown
+		JPOS	GoLeft
 
-	GoUp:
+	; Robot has to go right on the X axis
+	; XDir is stored as 1
+	GoRight:
 		LOAD 	ONE
 		STORE 	XDir
 		JUMP 	MoveLoop
 
-	GoDown:
+	; Robot has to go left on the X axis
+	; XDir is stored as 0
+	GoLeft:
 		LOAD 	ZERO
 		STORE 	XDir
 
+	;Decides which check to perform based on the XDir value
 	MoveLoop:
 		; Update the map with the current sensor readings
 		CALL 	UpdateMap
 
-		; Do the bounds check for real
-		LOAD XDir
-		JZERO CheckLess
-		JPOS CheckGreat
+		; Do the bounds check
+		LOAD 	XDir
+		JZERO 	CheckLess
+		JPOS	CheckGreat
 
+	; Checks if robot was before desired positon on X axis at start
 	CheckGreat:
-		LOAD	XPOS
+		IN		XPOS
 		SUB		ObjectXDist
 		JZERO 	AtObjectX
 		JPOS	AtObjectX
-		JUMP	KeepGoing
+		JUMP	KeepGoingInDirection
 
+	;If robot was after desired positon on X axis at start
 	CheckLess:
-		LOAD	XPOS
+		IN		XPOS
 		SUB		ObjectXDist
 		JZERO 	AtObjectX
 		JNEG	AtObjectX
-		JUMP	KeepGoing
+		JUMP	KeepGoingInDirection
 
-	KeepGoing:
+	;If robot is not yet at desired X position
+	KeepGoingInDirection:
+		
+		; FIXME tweak the speeds
+		LOAD	ZERO
+		STORE	DTheta
 		LOAD	FMid
-		OUT		LVELCMD
-		OUT		RVELCMD
+		STORE	DVel
+		CALL	ControlMovement
+	
+		; Check the bounds again!
 		JUMP	MoveLoop
 
 	AtObjectX:
-		; TODO turn for Randy's tagging
-		; TODO call Randy's tag method
-		; TODO return to home
-
 		; Stop the robot
 		LOAD	ZERO
 		OUT		LVELCMD
 		OUT		RVELCMD
+	
+		; TODO turn for Randy's tagging
+		; TODO call Randy's tag method
+		; Call Tag
+		; NOTE: My tag method calls GoHome method
+		; NOTE2: My GoHome method calls AtHome method
+		; NOTE3: AtHome method calls Init
 
 		; Return to main
 		RETURN
 
+; We are back at home now
+BackAtHome:
+	; Wait for user input to start again
+	CALL 	Init
+	RETURN
 
+; GoHome function will have the robot go home after tagging
+; Assumes DE2Bot is facing a wall and there is a clear straight path to wall
+GoHome:
+	; Go towards wall then stop when close
+	CALL 	GoToWall
+	; Determine which way to rotate
+	LOADI 	-90
+	STORE 	Angle
+	LOAD 	AlongLongWall
+	JZERO 	HomeRotate
+	LOADI 	90
+	STORE 	Angle
+HomeRotate:
+	; Rotate to face wall then go home
+	CALL  	Rotate
+	CALL 	GoToWall
+	JUMP 	BackAtHome
+
+; Tag function will travel to an object X distance away, tag it, and rotate to face the wall
+; Assumes DE2Bot is facing object and there is a clear, linear path to object
+Tag:
+	; Saves whatever is in AC
+	STORE 	Temp
+	; Update EncoderY (initial value)
+	IN   	YPOS
+	STORE 	EncoderY
+	; Control Movement Variables
+	LOADI 	THETA
+	STORE 	DTheta
+	LOAD 	FMid
+	STORE 	DVel
+TagIt:
+	; Move robot
+	CALL 	ControlMovement
+	; Check distance traveled
+	; Subtract initial EncoderY Pos, Cell Dist, and error margin
+	IN 		YPOS
+	CALL 	Abs
+	SUB 	EncoderY
+	SUB 	ObjectYDist
+	ADDI 	-10
+	JNEG 	TagIt
+	; Prepare to move backwards a little
+	; Update EncoderY and Control Movement
+	IN 		YPOS
+	CALL 	Abs
+	ADDI 	-30
+	STORE 	EncoderY
+	LOAD 	RMid
+	STORE 	DVel
+MoveBack:
+	; Move backwards a little
+	CALL ControlMovement
+	; Check distance
+	IN 		YPOS
+	CALL 	Abs
+	SUB 	EncoderY
+	JPOS 	MoveBack
+	; Rotate 180 and GoHome
+	LOADI 	180
+	CALL 	Rotate
+	CALL 	GoHome
+	
 ;Goes to middle and searches for object to go towards
 Middle:			DW 2090
 GoToMiddleSearch:
@@ -326,112 +520,66 @@ AtMiddle:
 		STORE Angle
 		JUMP	Rotate
 		JUMP	CheckMidObj
+		
+c7FFF: DW &H7FFF
+m16sA: DW 0 ; multiplicand
+m16sB: DW 0 ; multipler
+m16sc: DW 0 ; carry
+mcnt16s: DW 0 ; counter
+mres16sL: DW 0 ; result low
+mres16sH: DW 0 ; result high
 
+Ang0:		DW 90
+Ang1:		DW 44
+Ang2:		DW 12
+Ang3:		DW -12
+Ang4:		DW -44
+Ang5:		DW -90
+Ang6:		DW -144
+Ang7:		DW 144
 
-; Finds the closest object (relative to the wall) based on the map
-FindClosestObject:
-	; TODO CHECKME
-	LOAD	CELL
-	STORE	ObjectXDist
-	STORE	ObjectYDist
-	RETURN
+SensorToCheck: 	DW 0
+SensorAngle:		DW 0
 
-; We are back at home now
-BackAtHome:
-	; TODO wait for user input to start again
-	; For now just call die
-	CALL 	Die
-	RETURN
+SensorDist: 		DW 0
 
-; GoHome function will have the robot go home after tagging
-; Assumes DE2Bot is facing a wall and there is a clear straight path to wall
-GoHome:
-	; Go towards wall then stop when close
-	CALL 	GoToWall
-	; Determine which way to rotate
-	LOADI 	90
-	STORE 	Angle
-	LOAD 	AlongLongWall
-	JZERO 	HomeRotate
-	LOADI 	-90
-	STORE 	Angle
-HomeRotate:
-	; Rotate to face wall then go home
-	CALL  	Rotate
-	CALL 	GoToWall
-	JUMP 	BackAtHome
+SensorIndex: 		DW 0
 
-; Tag function will travel to an object X distance away, tag it, and rotate to face the wall
-; Assumes DE2Bot is facing object and there is a clear, linear path to object
-Tag:
-	; Saves whatever is in AC
-	STORE 	Temp
-	; Update EncoderY (initial value)
-	IN   	YPOS
-	STORE 	EncoderY
-	; Control Movement Variables
-	LOADI 	THETA
-	STORE 	DTheta
-	LOAD 	FMid
-	STORE 	DVel
-TagIt:
-	; Move robot
-	CALL 	ControlMovement
-	; Check distance traveled
-	; Subtract initial EncoderY Pos, Cell Dist, and error margin
-	IN 		YPOS
-	CALL 	Abs
-	SUB 	EncoderY
-	SUB 	ObjectYDist
-	ADDI 	-10
-	JNEG 	TagIt
-	; Prepare to move backwards a little
-	; Update EncoderY and Control Movement
-	IN 		YPOS
-	CALL 	Abs
-	ADDI 	-30
-	STORE 	EncoderY
-	LOAD 	RMid
-	STORE 	DVel
-MoveBack:
-	; Move backwards a little
-	CALL ControlMovement
-	; Check distance
-	IN 		YPOS
-	CALL 	Abs
-	SUB 	EncoderY
-	JPOS 	MoveBack
-	; Rotate 180 and GoHome
-	LOADI 	180
-	CALL 	Rotate
-	CALL 	GoHome
-
-; Sometimes it's useful to permanently stop execution.
-; This will also catch the execution if it accidentally
-; falls through from above.
-Die:
-	LOAD   Zero         ; Stop everything.
-	OUT    LVELCMD
-	OUT    RVELCMD
-	OUT    SONAREN
-	LOAD   DEAD         ; An indication that we are dead
-	OUT    SSEG2        ; "dEAd" on the LEDs
-
-	; Our version of HALT
-	Forever:
-		JUMP   Forever      ; Do this forever.
-		DEAD:  DW &HDEAD    ; Example of a "local" variable
+SensorUpdate:		DW 0
+; TODO: Update Array based on Sensor to Check
 
 ;**************************************************
 ; Helper Subroutines
 ;**************************************************
-
+KillSonars:
+	;stop all sensors
+	LOAD	ZERO
+	OUT		SONAREN
+	RETURN
+	
 ; Stops robot movement
 StopMovement:
 	LOAD 	ZERO
 	OUT 	LVELCMD
 	OUT 	RVELCMD
 	RETURN
+
+ShortBeep:
+	STORE	Temp
+	LOADI 	2
+	OUT		BEEP
+	LOADI	1
+	STORE	WaitTime
+	OUT		Timer
+
+	BeepLoop:
+		IN 		Timer
+		SUB 	WaitTime
+		JNEG	BeepLoop
+		LOADI	0
+		OUT		BEEP
+		LOAD 	Temp
+		RETURN
 
 ; Mod360 (keep angle between 0 and 359)
 Mod360:
@@ -510,7 +658,7 @@ GoToWall:
 	LOAD 	FMid
 	STORE 	DVel
 CheckWall:
-	CALL 	ControlMovement
+	CALL ControlMovement
 	; Check if distance is lower than threshold
 	IN 		DIST2
 	ADD 	WallThresh 	; 20 cm ~= 8 inches
@@ -519,6 +667,7 @@ CheckWall:
 	ADD 	WallThresh 	; 20 cm ~= 8 inches
 	JPOS 	CheckWall
 	CALL 	StopMovement 	; stops movement
+	CALL 	KillSonars
 
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
@@ -538,8 +687,6 @@ ControlMovement:
 	; for turning is to multiply the angular error by 4.
 	SHIFT  2
 	STORE  CMAErr      ; hold temporarily
-
-
 	; For this basic control method, simply take the
 	; desired forward velocity and add a differential
 	; velocity for each wheel when turning is needed.
@@ -554,7 +701,8 @@ ControlMovement:
 	OUT    LVELCMD
 
 	RETURN
-	CMAErr: DW 0       ; holds angle error velocity
+
+CMAErr: DW 0       ; holds angle error velocity
 
 CapVel:
 	; cap velocity values for the motors
@@ -579,6 +727,54 @@ Neg:
 	ADDI   1            ; Add one (i.e. negate number)
 Abs_r:
 	RETURN
+	
+	
+; Mult16s:  16x16 -> 32-bit signed multiplication
+; Based on Booth's algorithm.
+; Written by Kevin Johnson.  No licence or copyright applied.
+; Warning: does not work with factor B = -32768 (most-negative number).
+; To use:
+; - Store factors in m16sA and m16sB.
+; - Call Mult16s
+; - Result is stored in mres16sH and mres16sL (high and low words).
+Mult16s:
+		LOADI  0
+		STORE  m16sc        ; clear carry
+		STORE  mres16sH     ; clear result
+		LOADI  16           ; load 16 to counter
+	Mult16s_loop:
+		STORE  mcnt16s
+		LOAD   m16sc        ; check the carry (from previous iteration)
+		JZERO  Mult16s_noc  ; if no carry, move on
+		LOAD   mres16sH     ; if a carry,
+		ADD    m16sA        ;  add multiplicand to result H
+		STORE  mres16sH
+	Mult16s_noc: ; no carry
+		LOAD   m16sB
+		AND    One          ; check bit 0 of multiplier
+		STORE  m16sc        ; save as next carry
+		JZERO  Mult16s_sh   ; if no carry, move on to shift
+		LOAD   mres16sH     ; if bit 0 set,
+		SUB    m16sA        ;  subtract multiplicand from result H
+		STORE  mres16sH
+	Mult16s_sh:
+		LOAD   m16sB
+		SHIFT  -1           ; shift result L >>1
+		AND    c7FFF        ; clear msb
+		STORE  m16sB
+		LOAD   mres16sH     ; load result H
+		SHIFT  15           ; move lsb to msb
+		OR     m16sB
+		STORE  m16sB        ; result L now includes carry out from H
+		LOAD   mres16sH
+		SHIFT  -1
+		STORE  mres16sH     ; shift result H >>1
+		LOAD   mcnt16s
+		ADDI   -1           ; check counter
+		JPOS   Mult16s_loop ; need to iterate 16 times
+		LOAD   m16sB
+		STORE  mres16sL     ; multiplier and result L shared a word
+		RETURN              ; Done
 
 ; Subroutine to wait (block) for 1 second
 Wait1:
@@ -664,6 +860,14 @@ GetBattLvl:
 	IN     I2C_DATA    ; get the returned data
 	RETURN
 
+; Subroutine for Cosine of an angle
+; input THETA as degree
+; output x_val as cosine of THETA
+; using Taylor series -- will be accurate between -pi/2 and pi/2
+
+; NEED MULT16S, lowbyte DW &HFF, DIV16S, neg
+; TODO removed cause errors :(	
+
 ;***************************************************************
 ;* Variables
 ;***************************************************************
@@ -673,37 +877,46 @@ Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
 ErrMargin: 			DW 4
-XDir:				DW 0	; Direction on the X access robot is moving
-ObjectXDist:		DW 0 	; The x position of the next closest object
-ObjectYDist:		DW 0	; The absolute value of the y position of the next closest object
-AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
-ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a positive angle to tag objects
-TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
+XDir:				DW 0		; Current direction on the X access robot is moving. 1 = right, 0 = left
+ObjectXDist:		DW 0 		; The x position of the next closest object
+ObjectYDist:		DW 0		; The absolute value of the y position of the next closest object
+AlongLongWall:		DW 0		; Boolean that signifies if robot is aligned along the longest wall
+ObjectsPosTheta:	DW 0		; Boolean that signifies if the robot has to turn in a positive angle to tag objects
+TagVelocity:		DW 0		; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
 EncoderY: 			DW 0		; Stores current value of encoder in Y direction
 WallThresh: 		DW -200 	; Defines distance away from wall before DE2Bot should stop moving (used in GoHome function)
-Cell: 				DW 300	; Initialize cell value
-ObjLoc:				DW 300	 ; Stores the location of the object to be tagged
+Cell: 				DW 0		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
 CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
+
+y_val:			DW 0 
+THETAtemp2:		DW 0 
+THETAtemp4:		DW 0
+THETA2:			DW 0 
+THETA4:			DW 0
+THETA6:			DW 0 
+TCOPY:			DW 0
+CosSum:			DW 0
 
 
 ;***************************************************************
 ;* Constants
 ;* (though there is nothing stopping you from writing to these)
 ;***************************************************************
-NegOne:   DW -1
-Zero:     DW 0
-One:      DW 1
-Two:      DW 2
-Three:    DW 3
-Four:     DW 4
-Five:     DW 5
-Six:      DW 6
-Seven:    DW 7
-Eight:    DW 8
-Nine:     DW 9
-Ten:      DW 10
+NegFive:	DW -5
+NegOne:   	DW -1
+Zero:     	DW 0
+One:      	DW 1
+Two:      	DW 2
+Three:    	DW 3
+Four:     	DW 4
+Five:     	DW 5
+Six:      	DW 6
+Seven:    	DW 7
+Eight:    	DW 8
+Nine:     	DW 9
+Ten:      	DW 10
 
 ; Some bit masks.
 ; Masks of multiple bits can be constructed by ORing these
@@ -783,10 +996,11 @@ RESETPOS: EQU &HC3  ; write anything here to reset odometry to 0
 RIN:      EQU &HC8
 LIN:      EQU &HC9
 ;***************************************************************
-;* Allocate space in memory for our x and y arrays 
+;* Allocate space in memory for our x and y arrays
 ;* and our temporary array which will be used to estimate the distance by averaging a number of values
 ;* The x-array will inititialize at a location sufficiently far away from other instructions
 ;* Allows for dynamic length and known locations of words
 ;***************************************************************
-		 ORG     &H44C ; Start at location 1100 for the occupancy array
-OcArray: DW &H7FFF	
+		 
+
+ORG     &H44C ; Start at location 1100 for the occupancy array
