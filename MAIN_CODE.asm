@@ -59,10 +59,16 @@ Main:
 	
 	; Reset odometer in case wheels move after programming
 	OUT 	RESETPOS	
+	
+	; Initilize all the vars
 	CALL	InitializeVars
+	CALL	InitializeMap
+	
+	; Start the initial search
 	CALL	InitialSearch
 
 	; TODO we need some way to keep track of the number of objects left
+	; OR we could do it based on use input
 	; while (numObjects > 0) { call FindAndTagClosestObject }
 	CALL	FindAndTagClosestObject
 	; Reset odometer in case wheels move after programming
@@ -109,13 +115,17 @@ InitializeVars:
 		
 	ZeroThetaLoad:
 		LOAD	ZERO
-		JUMP ThetaStore
+		JUMP 	ThetaStore
 		
 	ThetaStore:
 		STORE	ObjectsPosTheta
 	
 		; Return!
 		RETURN
+		
+InitializeMap:
+	; TODO
+	DW 0
 
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
@@ -124,7 +134,8 @@ InitialSearch:
 		; TODO do this with interrupts instead of just checking every loop cycle
 		LOAD	MASK2
 		ADD		MASK3
-		OUT 	SONAREN
+		; TODO uncomment when we actually code for this and disable at the end
+		; OUT 	SONAREN
 
 	; Go forward until we are at the end of the edge
 	KeepGoingForward:
@@ -184,47 +195,82 @@ InitialSearch:
 		; Return to main
 		RETURN
 
+; Updates the "map" with current readings from the corresponding ultrasonic sensors
+; Uses basic thresholding, filtering, and data aggregation techniques
 UpdateMap:
-	; Traverse an axis,and store the distance recieved (represents 32mm increment)
  	LOAD 	AlongLongWall
-	JPOS 	LGO ; If no switches active, robot setup values for long axis traverse
-	JZERO  	SGO ; If SW0 active, robot setup values for short axis traverse
+	JPOS 	LGO ; If 1, robot is set up for long axis traversal
+	JZERO  	SGO ; If 0, robot setup values for short axis traverse
 
 	; FIXME turn on sensors based on which axis it is on AND the var XDir
+	; If XDir is 0, then we want to reverse which sensors are used (as the robot is backward)
 	
+	; Sonar sensor 5 is facing the objects, so turn it on and read it's value
 	LGO:
+		; Read value from the sonar sensor and store in Cell
 	 	LOAD	MASK5
 	 	OUT 	SONAREN
-	 	IN 		DIST5 ;Turn on and read value from sensor 5
-		CALL	CellIn ; If value read in less than the value already in cell, store it in cell
+	 	IN 		DIST5
+	 	STORE	Cell
+	 	
+	 	; Disable the sonar sensor
+	 	; FIXME disables 2 and 3 as well
+	 	LOAD	ZERO
+	 	OUT		SONAREN
+	 	
+	 	; Update the value in the cell and return!
+		CALL	UpdateCell
 	 	RETURN
 
+	; Sonar sensor0 is facing the objects, so turn it on and read it's value
 	SGO:
+		; Read value from the sonar sensor and store in Cell
 		LOAD	MASK0
 		OUT 	SONAREN
 		IN 		DIST0
-	 	CALL	CellIn ; If value read in less than the value already in cell, store it in cell
+		STORE	Cell
+	 	
+	 	; Disable the sonar sensor
+	 	; FIXME disables 2 and 3 as well
+	 	LOAD	ZERO
+	 	OUT		SONAREN
+	 	
+	 	; Update the value in the cell and return!
+	 	CALL	UpdateCell
 		RETURN
 
-	CellIn:
-	; Store value of cell into memory adress pointed to by XposIndex
-		STORE 	Cell ;store current distance read in cell
-	 	IN		XPOS ;Take in xposition
-		SHIFT 	five ;Index value of the array (applies same dist value cells of length 32 increments)
-		ADDI	CellArrI ;Add the value of starting address (where the memory for array begins)
-		STORE 	XposIndex ;Holds the adress where the dist value will be placed
-		LOAD 	CELL
-		ISTORE	XposIndex
-		RETURN
+; Update the cell in the array based on the value stored at cell and the current position of the robot
+; Filtering and thresholding happens here! 
+UpdateCell:
+
+	; Read the current x pos of the robot
+ 	IN		XPOS
+ 	
+ 	; CHECKME Divide the x position by 32 (shift by 5) to get the current cell in the array
+	SHIFT 	NEGFIVE
+	
+	; Add the value of the starting index of the array. This maps us to the proper index for the corresponding x position
+	ADD		CellArrI
+	
+	; We now have the address of the corresponding cell. Store it in a temp variable
+	STORE 	XposIndex
+	
+	; Do the filtering and aggregation
+	CALL	FilterAndAggregate
+	
+	; Return!
+	RETURN
 
 ;Subroutine that filters the array created in update map
-FilterArray:
+FilterAndAggregate:
 	;TODO not every cell in the array will have a reading, we need to figure how to filter the readings to produce continuous object
 	;Account for two object being at the same distance away from wall
 	;Account for one object being behind another
 	RETURN
 	
 ; Finds the closest object (relative to the wall) based on the map
+; Stores the x pos of the closest object in ObjectXDist
+; Stores the y pos of the closest object in ObjectYDist
 FindClosestObject:
 	; TODO traverse through the array and get the xPos for the closest object
 	; TODO store in ObjectXDist, store distance in ObjectYDist
@@ -240,8 +286,9 @@ FindAndTagClosestObject:
 
 		; Call method to get information about the closest object
 		CALL	FindClosestObject
-		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist
-		; TODO bounds check on the closest object (just in case?!?)
+		
+		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist!
+		; We need to move to the xPos
 
 	; Go toward the object until we hit the x distance
 	MoveTowardObject:
@@ -800,7 +847,7 @@ ObjectsPosTheta:	DW 0		; Boolean that signifies if the robot has to turn in a po
 TagVelocity:		DW 0		; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
 EncoderY: 			DW 0		; Stores current value of encoder in Y direction
 WallThresh: 		DW -200 	; Defines distance away from wall before DE2Bot should stop moving (used in GoHome function)
-Cell: 				DW 300		; Initialize cell value
+Cell: 				DW 0		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
 CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
@@ -810,18 +857,19 @@ XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
 ;* Constants
 ;* (though there is nothing stopping you from writing to these)
 ;***************************************************************
-NegOne:   DW -1
-Zero:     DW 0
-One:      DW 1
-Two:      DW 2
-Three:    DW 3
-Four:     DW 4
-Five:     DW 5
-Six:      DW 6
-Seven:    DW 7
-Eight:    DW 8
-Nine:     DW 9
-Ten:      DW 10
+NegFive:	DW -5
+NegOne:   	DW -1
+Zero:     	DW 0
+One:      	DW 1
+Two:      	DW 2
+Three:    	DW 3
+Four:     	DW 4
+Five:     	DW 5
+Six:      	DW 6
+Seven:    	DW 7
+Eight:    	DW 8
+Nine:     	DW 9
+Ten:      	DW 10
 
 ; Some bit masks.
 ; Masks of multiple bits can be constructed by ORing these
