@@ -190,6 +190,8 @@ UpdateMap:
 	JPOS 	LGO ; If no switches active, robot setup values for long axis traverse
 	JZERO  	SGO ; If SW0 active, robot setup values for short axis traverse
 
+	; FIXME turn on sensors based on which axis it is on AND the var XDir
+	
 	LGO:
 	 	LOAD	MASK5
 	 	OUT 	SONAREN
@@ -221,6 +223,15 @@ FilterArray:
 	;Account for two object being at the same distance away from wall
 	;Account for one object being behind another
 	RETURN
+	
+; Finds the closest object (relative to the wall) based on the map
+FindClosestObject:
+	; TODO traverse through the array and get the xPos for the closest object
+	; TODO store in ObjectXDist, store distance in ObjectYDist
+	LOAD	TEN
+	STORE	ObjectXDist
+	STORE	ObjectYDist
+	RETURN
 
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
@@ -232,80 +243,80 @@ FindAndTagClosestObject:
 		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist
 		; TODO bounds check on the closest object (just in case?!?)
 
-	; Go toward the object until we hit the y distance
+	; Go toward the object until we hit the x distance
 	MoveTowardObject:
 
 		;Checks where robot is relative to position to start
-		LOAD 	XPOS
+		IN	 	XPOS
 		SUB 	ObjectXDist
-		JNEG	GoUp
-		JZERO AtObjectX
-		JPOS	GoDown
+		JNEG	GoRight
+		JZERO 	AtObjectX
+		JPOS	GoLeft
 
-	;Robot has to go up the X axis do XDir is stored as 1
-	GoUp:
+	; Robot has to go right on the X axis
+	; XDir is stored as 1
+	GoRight:
 		LOAD 	ONE
 		STORE 	XDir
 		JUMP 	MoveLoop
 
-	;Robot has to go up the X axis do XDir is stored as 0
-	GoDown:
+	; Robot has to go left on the X axis
+	; XDir is stored as 0
+	GoLeft:
 		LOAD 	ZERO
 		STORE 	XDir
 
-	;Decides which check to perform base don XDir value
+	;Decides which check to perform based on the XDir value
 	MoveLoop:
 		; Update the map with the current sensor readings
 		CALL 	UpdateMap
 
-		; Do the bounds check for real
-		LOAD XDir
-		JZERO CheckLess
-		JPOS CheckGreat
+		; Do the bounds check
+		LOAD 	XDir
+		JZERO 	CheckLess
+		JPOS	CheckGreat
 
-	;If robot was before desired positon on X axis at start
+	; Checks if robot was before desired positon on X axis at start
 	CheckGreat:
-		LOAD	XPOS
+		IN		XPOS
 		SUB		ObjectXDist
 		JZERO 	AtObjectX
 		JPOS	AtObjectX
-		JUMP	KeepGoing
+		JUMP	KeepGoingInDirection
 
 	;If robot was after desired positon on X axis at start
 	CheckLess:
-		LOAD	XPOS
+		IN		XPOS
 		SUB		ObjectXDist
 		JZERO 	AtObjectX
 		JNEG	AtObjectX
-		JUMP	KeepGoing
+		JUMP	KeepGoingInDirection
 
 	;If robot is not yet at desired X position
-	KeepGoing:
+	KeepGoingInDirection:
+		
+		; FIXME tweak the speeds
+		LOAD	ZERO
+		STORE	DTheta
 		LOAD	FMid
-		OUT		LVELCMD
-		OUT		RVELCMD
+		STORE	DVel
+		CALL	ControlMovement
+	
+		; Check the bounds again!
 		JUMP	MoveLoop
 
 	AtObjectX:
-		; TODO turn for Randy's tagging
-		; TODO call Randy's tag method
-		; TODO return to home
-
 		; Stop the robot
 		LOAD	ZERO
 		OUT		LVELCMD
 		OUT		RVELCMD
+	
+		; TODO turn for Randy's tagging
+		; TODO call Randy's tag method
+		; TODO return to home
 
 		; Return to main
 		RETURN
-
-; Finds the closest object (relative to the wall) based on the map
-FindClosestObject:
-	; TODO CHECKME
-	LOAD	CELL
-	STORE	ObjectXDist
-	STORE	ObjectYDist
-	RETURN
 
 ; We are back at home now
 BackAtHome:
@@ -781,16 +792,15 @@ Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
 ErrMargin: 			DW 4
-XDir:				DW 0	; Direction on the X access robot is moving
-ObjectXDist:		DW 0 	; The x position of the next closest object
-ObjectYDist:		DW 0	; The absolute value of the y position of the next closest object
-AlongLongWall:		DW 0	; Boolean that signifies if robot is aligned along the longest wall
-ObjectsPosTheta:	DW 0	; Boolean that signifies if the robot has to turn in a positive angle to tag objects
-TagVelocity:		DW 0	; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
+XDir:				DW 0		; Current direction on the X access robot is moving. 1 = right, 0 = left
+ObjectXDist:		DW 0 		; The x position of the next closest object
+ObjectYDist:		DW 0		; The absolute value of the y position of the next closest object
+AlongLongWall:		DW 0		; Boolean that signifies if robot is aligned along the longest wall
+ObjectsPosTheta:	DW 0		; Boolean that signifies if the robot has to turn in a positive angle to tag objects
+TagVelocity:		DW 0		; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
 EncoderY: 			DW 0		; Stores current value of encoder in Y direction
 WallThresh: 		DW -200 	; Defines distance away from wall before DE2Bot should stop moving (used in GoHome function)
-Cell: 				DW 300	; Initialize cell value
-ObjLoc:				DW 300	 ; Stores the location of the object to be tagged
+Cell: 				DW 300		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
 CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
