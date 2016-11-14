@@ -123,10 +123,165 @@ InitializeVars:
 		; Return!
 		RETURN
 
-InitializeMap:
-	; TODO
-	DW 0
+;Variable that stores max dist to update array
+InitMaxDist:			DW 0
 
+;Stores Size of Array to be Filled
+InitArraySize:		DW 0
+
+;Keeps track of index of array
+InitFillCounter:	DW 0
+
+;Used to calculate memory location of index in array
+InitFillIndex:		DW 0
+
+;Initializes Array with Max Dists based on AlongLongWall
+InitializeMap:
+	LOAD		ZERO
+	STORE		InitFillCounter
+	LOAD		AlongLongWall
+	JPOS		InitLong
+	JUMP		InitShort
+
+	;If robot on long edge, max dist is MaxShort
+	InitLong:
+	LOAD		MaxLong
+	SHIFT		-5
+	ADDI		1
+	STORE 		InitArraySize
+	LOAD		MaxShort
+	STORE		InitMaxDist
+	JUMP		DistFillLoop
+
+	;If robot on short edge, max dist is MaxLong
+	InitShort:
+	LOAD		MaxShort
+	SHIFT		-5
+	ADDI 		1
+	STORE 		InitArraySize
+	LOAD		MaxLong
+	STORE		InitMaxDist
+
+	;Loop to fill array with the max dist value determined in previous steps
+	DistFillLoop:
+	LOAD		InitFillCounter
+	SUB			InitArraySize
+	JZERO		ArrayFilled
+	JPOS		ArrayFilled
+
+	LOAD		CellArrI
+	ADD			InitFillCounter
+	STORE 		InitFillIndex
+	LOAD		InitMaxDist
+	ISTORE		InitFillIndex
+
+	LOAD		InitFillCounter
+	ADDI		1
+	STORE		InitFillCounter
+	JUMP		DistFillLoop
+
+	ArrayFilled:
+	RETURN
+
+;Position tagged and needs to be updated in occupancy array
+TagPos:				DW 0
+
+;Actually Memory Location in array of tagged position
+TagIndex:			DW 0
+
+;Actually Memory Location of cell being checked left of tagged cell
+LeftTagIndex:	DW 0
+
+;Actually Memory Location of cell being checked right of tagged cell
+RightTagIndex: DW 0
+
+UpdateDist:		DW 0
+TagArraySize:	DW 0
+
+;Updates array based on positon tagged (stored in TagPos)
+TagArrayUpdate:
+	LOAD		AlongLongWall
+	JPOS		UpdLong
+	JUMP		UpdShort
+
+	;If robot on long edge, max dist is MaxShort
+	UpdLong:
+	LOAD		MaxLong
+	SHIFT		-5
+	ADDI		1
+	STORE 	TagArraySize
+	LOAD		MaxShort
+	STORE		UpdateDist
+	JUMP		FillTagP
+
+	;If robot on short edge, max dist is MaxLong
+	UpdShort:
+	LOAD		MaxShort
+	SHIFT		-5
+	ADDI		1
+	STORE 	TagArraySize
+	LOAD		MaxLong
+	STORE		UpdateDist
+
+	;Fills tagged position with max dist
+	FillTagP:
+	LOAD 		TagPos
+	SHIFT		-5
+	ADD			CellArrI
+	STORE		TagIndex
+
+	LOAD		UpdateDist
+	STORE		TagIndex
+
+	;Gets first right index to check
+	LOAD		TagIndex
+	ADDI		1
+	STORE		RightTagIndex
+
+	;Gets first left index to check
+	LOAD		TagIndex
+	ADDI		-1
+	STORE		LeftTagIndex
+
+	;Keeps update left if cells are not equal to max dist
+	KeepLeft:
+	LOAD		LeftTagIndex
+	SUB			CellArrI
+	JNEG		KeepRight
+	ILOAD		LeftTagIndex
+	SUB			UpdateDist
+	JZERO		KeepRight
+
+	LOAD		UpdateDist
+	ISTORE	LeftTagIndex
+
+	;Keeps checking right if cells are not equal to max dist
+	LOAD		LeftTagIndex
+	ADDI		-1
+	STORE		LeftTagIndex
+	JUMP		KeepLeft
+
+	KeepRight:
+	LOAD		CellArrI
+	ADD			TagArraySize
+	SUB			RightTagIndex
+	JNEG		TagUpdated
+	ILOAD		RightTagIndex
+	SUB			UpdateDist
+	JZERO		TagUpdated
+
+	LOAD		UpdateDist
+	ISTORE	RightTagIndex
+
+	LOAD		RightTagIndex
+	ADDI		1
+	STORE		RightTagIndex
+	JUMP		KeepRight
+
+	TagUpdated:
+	RETURN
+	
+	
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
 
@@ -183,9 +338,7 @@ InitialSearch:
 	; We are at the max bound of the wall now
 	DoneForward:
 		; Stop the wheels
-		LOAD	ZERO
-		OUT		LVELCMD
-		OUT		RVELCMD
+		CALL	StopMovement
 
 		; Rotate 180 (direction doesn't matter)
 		LOAD	Deg180
@@ -193,165 +346,6 @@ InitialSearch:
 		CALL	Rotate
 
 		; Return to main
-		RETURN
-
-
-	;Variable that stores max dist to update array
-	InitMaxDist:			DW 0
-
-	;Stores Size of Array to be Filled
-	InitArraySize:		DW 0
-
-	;Keeps track of index of array
-	InitFillCounter:	DW 0
-
-	;Used to calculate memory location of index in array
-	InitFillIndex:		DW 0
-
-	;Initializes Array with Max Dists based on AlongLongWall
-	InitArray:
-		LOAD		ZERO
-		STORE		InitFillCounter
-		LOAD		AlongLongWall
-		JPOS		InitLong
-		JUMP		InitShort
-
-		;If robot on long edge, max dist is MaxShort
-		InitLong:
-		LOAD		MaxLong
-		SHIFT		-5
-		ADDI		1
-		STORE 	InitArraySize
-		LOAD		MaxShort
-		STORE		InitMaxDist
-		JUMP		DistFillLoop
-
-		;If robot on short edge, max dist is MaxLong
-		InitShort:
-		LOAD		MaxShort
-		SHIFT		-5
-		ADDI 		1
-		STORE 	InitArraySize
-		LOAD		MaxLong
-		STORE		InitMaxDist
-
-		;Loop to fill array with the max dist value determined in previous steps
-		DistFillLoop:
-		LOAD		InitFillCounter
-		SUB			InitArraySize
-		JZERO		ArrayFilled
-		JPOS		ArrayFilled
-
-		LOAD		CellArrI
-		ADD			InitFillCounter
-		STORE 	InitFillIndex
-		LOAD		InitMaxDist
-		ISTORE	InitFillIndex
-
-		LOAD		InitFillCounter
-		ADDI		1
-		STORE		InitFillCounter
-		JUMP		DistFillLoop
-
-		ArrayFilled:
-		RETURN
-
-	;Position tagged and needs to be updated in occupancy array
-	TagPos:				DW 0
-
-	;Actually Memory Location in array of tagged position
-	TagIndex:			DW 0
-
-	;Actually Memory Location of cell being checked left of tagged cell
-	LeftTagIndex:	DW 0
-
-	;Actually Memory Location of cell being checked right of tagged cell
-	RightTagIndex: DW 0
-
-	UpdateDist:		DW 0
-	TagArraySize:	DW 0
-
-	;Updates array based on positon tagged (stored in TagPos)
-	TagArrayUpdate:
-		LOAD		AlongLongWall
-		JPOS		UpdLong
-		JUMP		UpdShort
-
-		;If robot on long edge, max dist is MaxShort
-		UpdLong:
-		LOAD		MaxLong
-		SHIFT		-5
-		ADDI		1
-		STORE 	TagArraySize
-		LOAD		MaxShort
-		STORE		UpdateDist
-		JUMP		FillTagP
-
-		;If robot on short edge, max dist is MaxLong
-		UpdShort:
-		LOAD		MaxShort
-		SHIFT		-5
-		ADDI		1
-		STORE 	TagArraySize
-		LOAD		MaxLong
-		STORE		UpdateDist
-
-		;Fills tagged position with max dist
-		FillTagP:
-		LOAD 		TagPos
-		SHIFT		-5
-		ADD			CellArrI
-		STORE		TagIndex
-
-		LOAD		UpdateDist
-		STORE		TagIndex
-
-		;Gets first right index to check
-		LOAD		TagIndex
-		ADDI		1
-		STORE		RightTagIndex
-
-		;Gets first left index to check
-		LOAD		TagIndex
-		ADDI		-1
-		STORE		LeftTagIndex
-
-		;Keeps update left if cells are not equal to max dist
-		KeepLeft:
-		LOAD		LeftTagIndex
-		SUB			CellArrI
-		JNEG		KeepRight
-		ILOAD		LeftTagIndex
-		SUB			UpdateDist
-		JZERO		KeepRight
-
-		LOAD		UpdateDist
-		ISTORE	LeftTagIndex
-
-		;Keeps checking right if cells are not equal to max dist
-		LOAD		LeftTagIndex
-		ADDI		-1
-		STORE		LeftTagIndex
-		JUMP		KeepLeft
-
-		KeepRight:
-		LOAD		CellArrI
-		ADD			TagArraySize
-		SUB			RightTagIndex
-		JNEG		TagUpdated
-		ILOAD		RightTagIndex
-		SUB			UpdateDist
-		JZERO		TagUpdated
-
-		LOAD		UpdateDist
-		ISTORE	RightTagIndex
-
-		LOAD		RightTagIndex
-		ADDI		1
-		STORE		RightTagIndex
-		JUMP		KeepRight
-
-		TagUpdated:
 		RETURN
 
 
@@ -402,9 +396,9 @@ UpdateCell:
 	; Read the current x pos of the robot
  	IN		XPOS
 
- 	; CHECKME Divide the x position by 32 (shift by 5) to get the current cell in the array
-	SHIFT 	NEGFIVE
-
+ 	; Divide the x position by 32 (shift by 5) to get the current cell in the array
+	SHIFT 	-5
+	
 	; Add the value of the starting index of the array. This maps us to the proper index for the corresponding x position
 	ADD		CellArrI
 
@@ -419,21 +413,106 @@ UpdateCell:
 
 ;Subroutine that filters the array created in update map
 FilterAndAggregate:
-	;TODO not every cell in the array will have a reading, we need to figure how to filter the readings to produce continuous object
-	;Account for two object being at the same distance away from wall
-	;Account for one object being behind another
-	RETURN
+		; Figure out what wall we are at
+		LOAD	AlongLongWall
+		JZERO	FilterLoadLong
+		JPOS	FilterLoadShort
+		
+	; We are along the short wall, so load the long distance as a threshold
+	FilterLoadLong:
+		LOAD	MaxLong
+		JUMP	FilterData
+	
+	; We are along the long wall, so load the short distance as a threshold
+	FilterLoadShort:
+		LOAD	MaxShort
+		JUMP	FilterData
+	
+	FilterData:
+		; We loaded a max value for the filter
+		; SUB the data stored in the temp variable cell. If is in the range only if result > 0
+		SUB		Cell
+		JZERO	FilterReturn
+		JNEG	FilterReturn
+		
+		; Sonar value passed the filter! We can now aggregate it with the data at the corresponding cell.
+		; Load the value in the current cell position in the array
+		ILOAD	XposIndex
+		
+		; Aggregate it with the new data: (oldVal + newCell) / 2
+		; CHECKME can we find a better aggregation algorithm (with the given limitations and datastructure)?
+		ADD		Cell
+		SHIFT	-1
+		
+		; Store it back in the corresponding index
+		ISTORE	XposIndex
+		
+	FilterReturn:
+		RETURN
 
 ; Finds the closest object (relative to the wall) based on the map
 ; Stores the x pos of the closest object in ObjectXDist
 ; Stores the y pos of the closest object in ObjectYDist
 FindClosestObject:
-	; TODO traverse through the array and get the xPos for the closest object
-	; TODO store in ObjectXDist, store distance in ObjectYDist
-	LOAD	TEN
-	STORE	ObjectXDist
-	STORE	ObjectYDist
-	RETURN
+		; TODO traverse through the array and get the xPos for the closest object
+		; TODO store in ObjectXDist, store distance in ObjectYDist
+		
+		; Set the counter to 0
+		LOAD		ZERO
+		STORE		InitFillCounter
+		
+		; Store the max long distance in the ObjectYDist
+		LOAD		MaxLong
+		STORE		ObjectYDist
+		
+	;Loop to fill array with the max dist value determined in previous steps
+	ClosestDistLoop:
+		LOAD		InitFillCounter
+		SUB			InitArraySize
+		JZERO		ClosestDone
+		JPOS		ClosestDone
+	
+		LOAD		CellArrI
+		ADD			InitFillCounter
+		STORE 		InitFillIndex
+		
+		LOAD		InitFillCounter
+		ADDI		1
+		STORE		InitFillCounter
+		JUMP		ClosestDistLoop
+		
+		; Check if it is the new closest
+		ILOAD		InitFillIndex
+		SUB			ObjectYDist
+		JNEG		NewClosestFound
+		JPOS		ClosestDistLoop
+		JZERO		ClosestDistLoop
+	
+	NewClosestFound:
+		; Store the y distance
+		ILOAD		InitFillIndex
+		STORE		ObjectYDist
+		
+		; Extrapolate the x position
+		LOAD		InitFillCounter
+		SHIFT		5
+		ADDI		-15
+		STORE		ObjectXDist
+		
+		; Go back to looping
+		JUMP		ClosestDistLoop
+
+	ClosestDone:
+		; DEBUG output closest x position
+		LOAD		ObjectXDist
+		OUT			SSEG1
+		
+		; DEBUG output y distance
+		LOAD		ObjectYDist
+		OUT			SSEG2
+		
+		; Return
+		RETURN
 
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
@@ -510,10 +589,8 @@ FindAndTagClosestObject:
 
 	AtObjectX:
 		; Stop the robot
-		LOAD	ZERO
-		OUT		LVELCMD
-		OUT		RVELCMD
-
+		CALL	StopMovement
+	
 		; TODO turn for Randy's tagging
 		; TODO call Randy's tag method
 		; TODO return to home
@@ -1018,8 +1095,9 @@ EncoderY: 			DW 0		; Stores current value of encoder in Y direction
 WallThresh: 		DW -200 	; Defines distance away from wall before DE2Bot should stop moving (used in GoHome function)
 Cell: 				DW 0		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
-CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
+CellArrI:   		DW &H64c	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
+FilterVal:			DW 0		; Updated in the code to set up the max filter
 
 y_val:			DW 0
 THETAtemp2:		DW 0
@@ -1133,5 +1211,5 @@ LIN:      EQU &HC9
 ;* Allows for dynamic length and known locations of words
 ;***************************************************************
 
-
-ORG     		&H44C ; Start at location 1100 for the occupancy array
+ORG     &H64c ; Start at location 1100 for the occupancy array
+DW		0	; Array start	
