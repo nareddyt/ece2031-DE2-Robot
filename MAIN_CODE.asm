@@ -148,7 +148,7 @@ InitializeMap:
 	LOAD		MaxLong
 	SHIFT		-5
 	ADDI		1
-	STORE 	InitArraySize
+	STORE 		InitArraySize
 	LOAD		MaxShort
 	STORE		InitMaxDist
 	JUMP		DistFillLoop
@@ -158,7 +158,7 @@ InitializeMap:
 	LOAD		MaxShort
 	SHIFT		-5
 	ADDI 		1
-	STORE 	InitArraySize
+	STORE 		InitArraySize
 	LOAD		MaxLong
 	STORE		InitMaxDist
 
@@ -171,9 +171,9 @@ InitializeMap:
 
 	LOAD		CellArrI
 	ADD			InitFillCounter
-	STORE 	InitFillIndex
+	STORE 		InitFillIndex
 	LOAD		InitMaxDist
-	ISTORE	InitFillIndex
+	ISTORE		InitFillIndex
 
 	LOAD		InitFillCounter
 	ADDI		1
@@ -454,19 +454,56 @@ FilterAndAggregate:
 ; Stores the x pos of the closest object in ObjectXDist
 ; Stores the y pos of the closest object in ObjectYDist
 FindClosestObject:
-	; TODO traverse through the array and get the xPos for the closest object
-	; TODO store in ObjectXDist, store distance in ObjectYDist
+		; TODO traverse through the array and get the xPos for the closest object
+		; TODO store in ObjectXDist, store distance in ObjectYDist
+		
+		; Set the counter to 0
+		LOAD		ZERO
+		STORE		InitFillCounter
+		
+		; Store the max long distance in the ObjectYDist
+		LOAD		MaxLong
+		STORE		ObjectYDist
+		
+	;Loop to fill array with the max dist value determined in previous steps
+	ClosestDistLoop:
+		LOAD		InitFillCounter
+		SUB			InitArraySize
+		JZERO		ClosestDone
+		JPOS		ClosestDone
 	
-	; Load the starting index of the array
-	ILOAD	CellArrI
+		LOAD		CellArrI
+		ADD			InitFillCounter
+		STORE 		InitFillIndex
+		
+		LOAD		InitFillCounter
+		ADDI		1
+		STORE		InitFillCounter
+		JUMP		ClosestDistLoop
+		
+		; Check if it is the new closest
+		ILOAD		InitFillIndex
+		SUB			ObjectYDist
+		JNEG		NewClosestFound
+		JPOS		ClosestDistLoop
+		JZERO		ClosestDistLoop
 	
-	; TODO
-	
-	LOAD	ZERO
-	ADDI	500
-	STORE	ObjectXDist
-	STORE	ObjectYDist
-	RETURN
+	NewClosestFound:
+		; Store the y distance
+		ILOAD		InitFillIndex
+		STORE		ObjectYDist
+		
+		; Extrapolate the x position
+		LOAD		InitFillCounter
+		SHIFT		5
+		ADDI		-15
+		STORE		ObjectXDist
+		
+		; Go back to looping
+		JUMP		ClosestDistLoop
+
+	ClosestDone:
+		RETURN
 
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
