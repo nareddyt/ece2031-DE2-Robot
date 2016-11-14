@@ -1053,7 +1053,7 @@ EncoderY: 			DW 0		; Stores current value of encoder in Y direction
 WallThresh: 		DW -200 	; Defines distance away from wall before DE2Bot should stop moving (used in GoHome function)
 Cell: 				DW 0		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
-CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
+CellArrI:   		DW &H64c	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
 FilterVal:			DW 0		; Updated in the code to set up the max filter
 
@@ -1169,5 +1169,5 @@ LIN:      EQU &HC9
 ;* Allows for dynamic length and known locations of words
 ;***************************************************************
 
-
-ORG     		&H44C ; Start at location 1100 for the occupancy array
+ORG     &H64c ; Start at location 1100 for the occupancy array
+DW		0	; Array start	
