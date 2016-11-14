@@ -792,6 +792,142 @@ GetBattLvl:
 	IN     I2C_DATA    ; get the returned data
 	RETURN
 
+; Subroutine for Cosine of an angle
+; input THETA as degree
+; output x_val as cosine of THETA
+; using Taylor series -- will be accurate between -pi/2 and pi/2
+
+; NEED MULT16S, lowbyte DW &HFF, DIV16S, neg
+COSINE:
+		LOAD	THETA
+		STORE 	TCOPY
+		LOAD 	THETA
+		ADDI 	-180
+		JNEG 	NEGSINE			; if THETA is in third or fourth quadrant, sine value will be output as negative
+		ADDI	180
+		ADDI 	-90
+		JPOS	QUAD2
+		ADDI	90
+THETAQUAD2:
+THETANEGSINE:
+		LOAD 	THETA
+		STORE 	m16sA
+		STORE 	m16sB
+		CALL	Mult16s
+		LOAD    mres16sH
+		SHIFT   8            ; move high word of result up 8 bits
+		STORE   mres16sH
+		LOAD    mres16sL
+		SHIFT   -8           ; move low word of result down 8 bits
+		AND     LowByte
+		OR      mres16sH     ; combine high and low words of result
+		STORE	THETAtemp2	 ; equivalent to THETA ^ 2
+		STORE	THETA2
+		SHIFT	-1			 ; divide by 2
+		CALL 	Neg
+		STORE	THETA2
+		
+		LOAD 	THETAtemp
+		STORE 	m16sA
+		STORE 	m16sB
+		CALL	Mult16s
+		LOAD    mres16sH
+		SHIFT   8            ; move high word of result up 8 bits
+		STORE   mres16sH
+		LOAD    mres16sL
+		SHIFT   -8           ; move low word of result down 8 bits
+		AND     LowByte
+		OR      mres16sH     ; combine high and low words of resultv
+		STORE 	THETAtemp4	 ; equivalent to THETA ^ 4
+		STORE 	THETA4
+		
+		LOADI 	2
+		SHIFT	5			 ; immediate of 2 ^ 5 = 32
+		ADDI 	-8			 ; 32 - 8 = 24
+		STORE 	d16sD
+		LOAD 	THETA4
+		STORE 	d16sN
+		CALL	Div16s
+		LOAD	dres16sQ
+		STORE 	THETA4
+		
+		LOAD 	THETAtemp4	 ; performing THETA^6
+		STORE 	m16sA
+		LOAD	THETAtemp2
+		STORE 	m16sB
+		CALL	Mult16s
+		LOAD    mres16sH
+		SHIFT   8            ; move high word of result up 8 bits
+		STORE   mres16sH
+		LOAD    mres16sL
+		SHIFT   -8           ; move low word of result down 8 bits
+		AND     LowByte
+		OR      mres16sH     ; combine high and low words of result
+		STORE	THETA6		 ; equivalent to THETA ^ 6
+		
+		LOADI	2
+		SHIFT	10			 ; immediate of 1024
+		ADDI	-304		 ; 1024 - 304 = 720
+		LOAD 	d16sD
+		LOAD 	THETA6
+		STORE 	d16sN
+		CALL	Div16s
+		LOAD	dres16sQ
+		Call	Neg
+		STORE 	THETA6
+		
+		LOADI	1
+		ADD		THETA2
+		ADD 	THETA4
+		ADD		THETA6
+		STORE	x_val
+		
+		LOAD 	TCOPY
+		ADDI	-180
+		JPOS	NEGYVAL
+		
+		STORE	x_val
+		RETURN	
+		
+NEGYVAL:	
+		LOAD 	x_val
+		CALL	Neg			; negate x_val if in quadrants III o IV
+		STORE 	x_val
+		RETURN
+		
+QUAD2:	
+		LOAD 	THETA
+		ADDI	-90
+		J		THETAQUAD2		
+		
+NEGSINE:
+		LOADI	360
+		SUB		THETA
+		J THETANEGSINE
+		
+		
+; Subroutine for SINE function
+; input: distance from the object (DISTX) <based on the sonar being used, THETA
+	; sin(theta) = O/H = x_val/DISTX
+; output: y_val
+; NEEDED: COSINE
+
+SINE:
+		LOAD	THETA
+		ADDI	-90		; finding other angle
+ 		CALL 	COSINE
+		LOAD 	x_val
+		STORE 	y_val	; by finding the cosine of the other angle, the sine of the original triangle can be found
+	
+		STORE 	d16sN
+		LOAD  	DISTX
+		STORE 	d16sN
+		CALL	Div16s
+		LOAD	dres16sQ
+		STORE 	y_val
+		RETURN
+	
+
 ;***************************************************************
 ;* Variables
 ;***************************************************************
@@ -813,6 +949,15 @@ Cell: 				DW 300		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
 CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
+
+y_val:			DW 0 
+THETAtemp2:		DW 0 
+THETAtemp4:		DW 0
+THETA2 :		DW 0 
+THETA4 :		DW 0
+THETA6 :		DW 0 
+TCOPY  :		DW 0
+CosSum:			DW 0
 
 
 ;***************************************************************
@@ -915,5 +1060,6 @@ LIN:      EQU &HC9
 ;* The x-array will inititialize at a location sufficiently far away from other instructions
 ;* Allows for dynamic length and known locations of words
 ;***************************************************************
-		 ORG     &H44C ; Start at location 1100 for the occupancy array
-OcArray: DW &H7FFF
+		 
+
+ORG     &H44C ; Start at location 1100 for the occupancy array
