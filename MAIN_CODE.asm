@@ -503,6 +503,15 @@ FindClosestObject:
 		JUMP		ClosestDistLoop
 
 	ClosestDone:
+		; DEBUG output closest x position
+		LOAD		ObjectXDist
+		OUT			SSEG1
+		
+		; DEBUG output y distance
+		LOAD		ObjectYDist
+		OUT			SSEG2
+		
+		; Return
 		RETURN
 
 ; Goes to the x position the closest object is located at
