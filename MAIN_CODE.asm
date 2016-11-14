@@ -123,10 +123,165 @@ InitializeVars:
 		; Return!
 		RETURN
 
-InitializeMap:
-	; TODO
-	DW 0
+;Variable that stores max dist to update array
+InitMaxDist:			DW 0
 
+;Stores Size of Array to be Filled
+InitArraySize:		DW 0
+
+;Keeps track of index of array
+InitFillCounter:	DW 0
+
+;Used to calculate memory location of index in array
+InitFillIndex:		DW 0
+
+;Initializes Array with Max Dists based on AlongLongWall
+InitializeMap:
+	LOAD		ZERO
+	STORE		InitFillCounter
+	LOAD		AlongLongWall
+	JPOS		InitLong
+	JUMP		InitShort
+
+	;If robot on long edge, max dist is MaxShort
+	InitLong:
+	LOAD		MaxLong
+	SHIFT		-5
+	ADDI		1
+	STORE 	InitArraySize
+	LOAD		MaxShort
+	STORE		InitMaxDist
+	JUMP		DistFillLoop
+
+	;If robot on short edge, max dist is MaxLong
+	InitShort:
+	LOAD		MaxShort
+	SHIFT		-5
+	ADDI 		1
+	STORE 	InitArraySize
+	LOAD		MaxLong
+	STORE		InitMaxDist
+
+	;Loop to fill array with the max dist value determined in previous steps
+	DistFillLoop:
+	LOAD		InitFillCounter
+	SUB			InitArraySize
+	JZERO		ArrayFilled
+	JPOS		ArrayFilled
+
+	LOAD		CellArrI
+	ADD			InitFillCounter
+	STORE 	InitFillIndex
+	LOAD		InitMaxDist
+	ISTORE	InitFillIndex
+
+	LOAD		InitFillCounter
+	ADDI		1
+	STORE		InitFillCounter
+	JUMP		DistFillLoop
+
+	ArrayFilled:
+	RETURN
+
+;Position tagged and needs to be updated in occupancy array
+TagPos:				DW 0
+
+;Actually Memory Location in array of tagged position
+TagIndex:			DW 0
+
+;Actually Memory Location of cell being checked left of tagged cell
+LeftTagIndex:	DW 0
+
+;Actually Memory Location of cell being checked right of tagged cell
+RightTagIndex: DW 0
+
+UpdateDist:		DW 0
+TagArraySize:	DW 0
+
+;Updates array based on positon tagged (stored in TagPos)
+TagArrayUpdate:
+	LOAD		AlongLongWall
+	JPOS		UpdLong
+	JUMP		UpdShort
+
+	;If robot on long edge, max dist is MaxShort
+	UpdLong:
+	LOAD		MaxLong
+	SHIFT		-5
+	ADDI		1
+	STORE 	TagArraySize
+	LOAD		MaxShort
+	STORE		UpdateDist
+	JUMP		FillTagP
+
+	;If robot on short edge, max dist is MaxLong
+	UpdShort:
+	LOAD		MaxShort
+	SHIFT		-5
+	ADDI		1
+	STORE 	TagArraySize
+	LOAD		MaxLong
+	STORE		UpdateDist
+
+	;Fills tagged position with max dist
+	FillTagP:
+	LOAD 		TagPos
+	SHIFT		-5
+	ADD			CellArrI
+	STORE		TagIndex
+
+	LOAD		UpdateDist
+	STORE		TagIndex
+
+	;Gets first right index to check
+	LOAD		TagIndex
+	ADDI		1
+	STORE		RightTagIndex
+
+	;Gets first left index to check
+	LOAD		TagIndex
+	ADDI		-1
+	STORE		LeftTagIndex
+
+	;Keeps update left if cells are not equal to max dist
+	KeepLeft:
+	LOAD		LeftTagIndex
+	SUB			CellArrI
+	JNEG		KeepRight
+	ILOAD		LeftTagIndex
+	SUB			UpdateDist
+	JZERO		KeepRight
+
+	LOAD		UpdateDist
+	ISTORE	LeftTagIndex
+
+	;Keeps checking right if cells are not equal to max dist
+	LOAD		LeftTagIndex
+	ADDI		-1
+	STORE		LeftTagIndex
+	JUMP		KeepLeft
+
+	KeepRight:
+	LOAD		CellArrI
+	ADD			TagArraySize
+	SUB			RightTagIndex
+	JNEG		TagUpdated
+	ILOAD		RightTagIndex
+	SUB			UpdateDist
+	JZERO		TagUpdated
+
+	LOAD		UpdateDist
+	ISTORE	RightTagIndex
+
+	LOAD		RightTagIndex
+	ADDI		1
+	STORE		RightTagIndex
+	JUMP		KeepRight
+
+	TagUpdated:
+	RETURN
+	
+	
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
 
@@ -191,165 +346,6 @@ InitialSearch:
 		CALL	Rotate
 
 		; Return to main
-		RETURN
-
-
-	;Variable that stores max dist to update array
-	InitMaxDist:			DW 0
-
-	;Stores Size of Array to be Filled
-	InitArraySize:		DW 0
-
-	;Keeps track of index of array
-	InitFillCounter:	DW 0
-
-	;Used to calculate memory location of index in array
-	InitFillIndex:		DW 0
-
-	;Initializes Array with Max Dists based on AlongLongWall
-	InitArray:
-		LOAD		ZERO
-		STORE		InitFillCounter
-		LOAD		AlongLongWall
-		JPOS		InitLong
-		JUMP		InitShort
-
-		;If robot on long edge, max dist is MaxShort
-		InitLong:
-		LOAD		MaxLong
-		SHIFT		-5
-		ADDI		1
-		STORE 	InitArraySize
-		LOAD		MaxShort
-		STORE		InitMaxDist
-		JUMP		DistFillLoop
-
-		;If robot on short edge, max dist is MaxLong
-		InitShort:
-		LOAD		MaxShort
-		SHIFT		-5
-		ADDI 		1
-		STORE 	InitArraySize
-		LOAD		MaxLong
-		STORE		InitMaxDist
-
-		;Loop to fill array with the max dist value determined in previous steps
-		DistFillLoop:
-		LOAD		InitFillCounter
-		SUB			InitArraySize
-		JZERO		ArrayFilled
-		JPOS		ArrayFilled
-
-		LOAD		CellArrI
-		ADD			InitFillCounter
-		STORE 	InitFillIndex
-		LOAD		InitMaxDist
-		ISTORE	InitFillIndex
-
-		LOAD		InitFillCounter
-		ADDI		1
-		STORE		InitFillCounter
-		JUMP		DistFillLoop
-
-		ArrayFilled:
-		RETURN
-
-	;Position tagged and needs to be updated in occupancy array
-	TagPos:				DW 0
-
-	;Actually Memory Location in array of tagged position
-	TagIndex:			DW 0
-
-	;Actually Memory Location of cell being checked left of tagged cell
-	LeftTagIndex:	DW 0
-
-	;Actually Memory Location of cell being checked right of tagged cell
-	RightTagIndex: DW 0
-
-	UpdateDist:		DW 0
-	TagArraySize:	DW 0
-
-	;Updates array based on positon tagged (stored in TagPos)
-	TagArrayUpdate:
-		LOAD		AlongLongWall
-		JPOS		UpdLong
-		JUMP		UpdShort
-
-		;If robot on long edge, max dist is MaxShort
-		UpdLong:
-		LOAD		MaxLong
-		SHIFT		-5
-		ADDI		1
-		STORE 	TagArraySize
-		LOAD		MaxShort
-		STORE		UpdateDist
-		JUMP		FillTagP
-
-		;If robot on short edge, max dist is MaxLong
-		UpdShort:
-		LOAD		MaxShort
-		SHIFT		-5
-		ADDI		1
-		STORE 	TagArraySize
-		LOAD		MaxLong
-		STORE		UpdateDist
-
-		;Fills tagged position with max dist
-		FillTagP:
-		LOAD 		TagPos
-		SHIFT		-5
-		ADD			CellArrI
-		STORE		TagIndex
-
-		LOAD		UpdateDist
-		STORE		TagIndex
-
-		;Gets first right index to check
-		LOAD		TagIndex
-		ADDI		1
-		STORE		RightTagIndex
-
-		;Gets first left index to check
-		LOAD		TagIndex
-		ADDI		-1
-		STORE		LeftTagIndex
-
-		;Keeps update left if cells are not equal to max dist
-		KeepLeft:
-		LOAD		LeftTagIndex
-		SUB			CellArrI
-		JNEG		KeepRight
-		ILOAD		LeftTagIndex
-		SUB			UpdateDist
-		JZERO		KeepRight
-
-		LOAD		UpdateDist
-		ISTORE	LeftTagIndex
-
-		;Keeps checking right if cells are not equal to max dist
-		LOAD		LeftTagIndex
-		ADDI		-1
-		STORE		LeftTagIndex
-		JUMP		KeepLeft
-
-		KeepRight:
-		LOAD		CellArrI
-		ADD			TagArraySize
-		SUB			RightTagIndex
-		JNEG		TagUpdated
-		ILOAD		RightTagIndex
-		SUB			UpdateDist
-		JZERO		TagUpdated
-
-		LOAD		UpdateDist
-		ISTORE	RightTagIndex
-
-		LOAD		RightTagIndex
-		ADDI		1
-		STORE		RightTagIndex
-		JUMP		KeepRight
-
-		TagUpdated:
 		RETURN
 
 
