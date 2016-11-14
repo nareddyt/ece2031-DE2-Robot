@@ -266,7 +266,7 @@ InitialSearch:
 	LeftTagIndex:	DW 0
 
 	;Actually Memory Location of cell being checked right of tagged cell
-	RightTagIndex:DW 0
+	RightTagIndex: DW 0
 
 	UpdateDist:		DW 0
 	TagArraySize:	DW 0
