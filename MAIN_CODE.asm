@@ -376,7 +376,7 @@ GoHome:
 	; Determine which way to rotate
 	LOADI 	90
 	STORE 	Angle
-	LOAD 	ObjectsPosTheta
+	LOAD 	AlongLongWall
 	JZERO 	HomeRotate
 	LOADI 	-90
 	STORE 	Angle
@@ -407,7 +407,7 @@ TagIt:
 	IN 		YPOS
 	CALL 	Abs
 	SUB 	EncoderY
-	SUB 	Cell
+	SUB 	ObjectYDist
 	ADDI 	-10
 	JNEG 	TagIt
 	; Prepare to move backwards a little
@@ -536,23 +536,6 @@ StopMovement:
 	OUT 	RVELCMD
 	RETURN
 
-ShortBeep:
-	STORE	Temp
-	LOADI 	2
-	OUT		BEEP
-	LOADI	1
-	STORE	WaitTime
-	OUT		Timer
-
-	BeepLoop:
-		IN 		Timer
-		SUB 	WaitTime
-		JNEG	BeepLoop
-		LOADI	0
-		OUT		BEEP
-		LOAD 	Temp
-		RETURN
-
 ; Mod360 (keep angle between 0 and 359)
 Mod360:
 	JNEG	M360N
@@ -630,7 +613,7 @@ GoToWall:
 	LOAD 	FMid
 	STORE 	DVel
 CheckWall:
-	CALL ControlMovement
+	CALL 	ControlMovement
 	; Check if distance is lower than threshold
 	IN 		DIST2
 	ADD 	WallThresh 	; 20 cm ~= 8 inches
