@@ -67,10 +67,23 @@ Main:
 	CALL	FindAndTagClosestObject
 	; Reset odometer in case wheels move after programming
 	OUT 	RESETPOS
-	
-	; We are done!
-	CALL Die
 
+; Sometimes it's useful to permanently stop execution.
+; This will also catch the execution if it accidentally
+; falls through from above.
+Die:
+		LOAD   Zero         ; Stop everything.
+		OUT    LVELCMD
+		OUT    RVELCMD
+		OUT    SONAREN
+		LOAD   DEAD         ; An indication that we are dead
+		OUT    SSEG2        ; "dEAd" on the LEDs
+	
+	; Our version of HALT
+	Forever:
+		JUMP   Forever      ; Do this forever.
+		DEAD:  DW &HDEAD    ; Example of a "local" variable
+		
 ; =================== ;
 ; END OF CONTROL FLOW ;
 ; =================== ;
@@ -86,7 +99,7 @@ InitializeVars:
 		STORE 	AlongLongWall
 	
 		; ObjectsPosTheta: Sets var to 1 if the robot must turn in the positive direction to tag objects.
-		; Note: We turn positive if we are along the short edge
+		; Note: We turn positive if we are along the short edge for the given use case
 		JZERO	PositiveThetaLoad
 		JPOS	ZeroThetaLoad
 		
@@ -101,16 +114,12 @@ InitializeVars:
 	ThetaStore:
 		STORE	ObjectsPosTheta
 	
-		; Reset odometer in case wheels move after initialization
-		OUT 	RESETPOS
-	
 		; Return!
 		RETURN
 
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
-		; TODO change code based on 2 vars
-
+		
 		; Enable sonar sensors 2 and 3 to make sure we don't run into anything
 		; TODO do this with interrupts instead of just checking every loop cycle
 		LOAD	MASK2
@@ -121,13 +130,14 @@ InitialSearch:
 	KeepGoingForward:
 
 		; Update the map with the current sensor readings
-		; CALL Jeff's code here!
+		; Call Jeff's code here!
 		CALL 	UpdateMap
 
 		; Check the robot has gone too far in the x direction
 		; Note that this distance depends on which wall we are following, stored in AlongLongWall
 		LOAD	AlongLongWall
 		JZERO	LoadShortDistance
+		JPOS	LoadLongDistance
 
 	; We are travelling along the long edge, so check this distance bound
 	LoadLongDistance:
@@ -146,13 +156,13 @@ InitialSearch:
 
 		; TODO Check if we are about to hit an object with the ultrasonic sensors
 		; TODO interrupts instead of checking at each loop?
-		; CHECKME maybe we should aggregate this data as well?
+		; CHECKME maybe we should aggregate this data as well? Should test :/
 
 		; Keep going forward as we have not hit the max limit for the wall
 		; FIXME tweak the speeds
-		IN		THETA
+		LOAD	ZERO
 		STORE	DTheta
-		LOAD	FFast
+		LOAD	FMid
 		STORE	DVel
 		CALL	ControlMovement
 
@@ -175,7 +185,7 @@ InitialSearch:
 		RETURN
 
 UpdateMap:
-	;Traverse an axis,and store the distance recieved (represents 32mm increment)
+	; Traverse an axis,and store the distance recieved (represents 32mm increment)
  	LOAD 	AlongLongWall
 	JPOS 	LGO ; If no switches active, robot setup values for long axis traverse
 	JZERO  	SGO ; If SW0 active, robot setup values for short axis traverse
@@ -206,87 +216,11 @@ UpdateMap:
 		RETURN
 
 ;Subroutine that filters the array created in update map
-filterArray:
+FilterArray:
 	;TODO not every cell in the array will have a reading, we need to figure how to filter the readings to produce continuous object
 	;Account for two object being at the same distance away from wall
 	;Account for one object being behind another
-	Return
-
-	;*******************************************************************************
-	; Mult16s:  16x16 -> 32-bit signed multiplication
-	; Based on Booth's algorithm.
-	; Written by Kevin Johnson.  No licence or copyright applied.
-	; Warning: does not work with factor B = -32768 (most-negative number).
-	; To use:
-	; - Store factors in m16sA and m16sB.
-	; - Call Mult16s
-	; - Result is stored in mres16sH and mres16sL (high and low words).
-	;*******************************************************************************
-	Mult16s:
-		LOADI  0
-		STORE  m16sc        ; clear carry
-		STORE  mres16sH     ; clear result
-		LOADI  16           ; load 16 to counter
-	Mult16s_loop:
-		STORE  mcnt16s
-		LOAD   m16sc        ; check the carry (from previous iteration)
-		JZERO  Mult16s_noc  ; if no carry, move on
-		LOAD   mres16sH     ; if a carry,
-		ADD    m16sA        ;  add multiplicand to result H
-		STORE  mres16sH
-	Mult16s_noc: ; no carry
-		LOAD   m16sB
-		AND    One          ; check bit 0 of multiplier
-		STORE  m16sc        ; save as next carry
-		JZERO  Mult16s_sh   ; if no carry, move on to shift
-		LOAD   mres16sH     ; if bit 0 set,
-		SUB    m16sA        ;  subtract multiplicand from result H
-		STORE  mres16sH
-	Mult16s_sh:
-		LOAD   m16sB
-		SHIFT  -1           ; shift result L >>1
-		AND    c7FFF        ; clear msb
-		STORE  m16sB
-		LOAD   mres16sH     ; load result H
-		SHIFT  15           ; move lsb to msb
-		OR     m16sB
-		STORE  m16sB        ; result L now includes carry out from H
-		LOAD   mres16sH
-		SHIFT  -1
-		STORE  mres16sH     ; shift result H >>1
-		LOAD   mcnt16s
-		ADDI   -1           ; check counter
-		JPOS   Mult16s_loop ; need to iterate 16 times
-		LOAD   m16sB
-		STORE  mres16sL     ; multiplier and result L shared a word
-		RETURN              ; Done
-
-	c7FFF: DW &H7FFF
-	m16sA: DW 0 ; multiplicand
-	m16sB: DW 0 ; multipler
-	m16sc: DW 0 ; carry
-	mcnt16s: DW 0 ; counter
-	mres16sL: DW 0 ; result low
-	mres16sH: DW 0 ; result high
-
-	Ang0:		DW 90
-	Ang1:		DW 44
-	Ang2:		DW 12
-	Ang3:		DW -12
-	Ang4:		DW -44
-	Ang5:		DW -90
-	Ang6:		DW -144
-	Ang7:		DW 144
-
-	SensorToCheck: 	DW 0
-	SensorAngle:		DW 0
-
-	SensorDist: 		DW 0
-
-	SensorIndex: 		DW 0
-
-	SensorUpdate:
-	; TODO: Update Array based on Sensor to Check
+	RETURN
 
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
@@ -365,70 +299,6 @@ FindAndTagClosestObject:
 		; Return to main
 		RETURN
 
-
-;Goes to middle and searches for object to go towards
-Middle:			DW 2090
-GoToMiddleSearch:
-
-	;Check if robot is at middle yet
-	CheckIfMiddle:
-		CALL 	UpdateMap
-		LOAD 	XPOS
-		ADD 	-2090
-		JNEG 	NotAtMiddle
-		JUMP 	AtMiddle
-
-	;Robot Moves Forward if Not at middle yet
-	NotAtMiddle:
-		LOAD	FMid
-		OUT		LVELCMD
-		OUT		RVELCMD
-		JUMP  CheckIfMiddle
-
-;Deals with robot rotation at middle position
-AtMiddle:
-	LOAD	ZERO
-	OUT		LVELCMD
-	OUT		RVELCMD
-
-	LOAD	MASK2
-	OUT		SONAREN
-	LOAD	MASK3
-	OUT		SONAREN
-
-	;Check if sensor 2 detects an Object
-	CheckMidObj:
-		CALL 	UpdateMap
-		LOAD	DIST2
-		ADDI	-915
-		JNEG	TwoGot
-		JUMP	Rotate10
-
-	;Given sensor 2 found an object, Check if sensor 3 detects an Object
-	TwoGot:
-		LOAD	ONE
-		LOAD	DIST3
-		ADDI	-915
-		JNEG	ThreeGot
-		JUMP	Rotate10
-
-	;Given sensor 2 and 3 found an object, handle remaining action
-	ThreeGot:
-		LOAD	ZERO
-		OUT		LVELCMD
-		OUT		RVELCMD
-		;Temporarily
-		JUMP	ThreeGot
-
-	;Rotates 12 degrees if object was not in front of object based on s2 and s3
-	Rotate10:
-		LOAD 	ZERO
-		ADDI 	12
-		STORE Angle
-		JUMP	Rotate
-		JUMP	CheckMidObj
-
-
 ; Finds the closest object (relative to the wall) based on the map
 FindClosestObject:
 	; TODO CHECKME
@@ -506,22 +376,95 @@ MoveBack:
 	LOADI 	180
 	CALL 	Rotate
 	CALL 	GoHome
+	
+;Goes to middle and searches for object to go towards
+Middle:			DW 2090
+GoToMiddleSearch:
 
-; Sometimes it's useful to permanently stop execution.
-; This will also catch the execution if it accidentally
-; falls through from above.
-Die:
-	LOAD   Zero         ; Stop everything.
-	OUT    LVELCMD
-	OUT    RVELCMD
-	OUT    SONAREN
-	LOAD   DEAD         ; An indication that we are dead
-	OUT    SSEG2        ; "dEAd" on the LEDs
+	;Check if robot is at middle yet
+	CheckIfMiddle:
+		CALL 	UpdateMap
+		LOAD 	XPOS
+		ADD 	-2090
+		JNEG 	NotAtMiddle
+		JUMP 	AtMiddle
 
-	; Our version of HALT
-	Forever:
-		JUMP   Forever      ; Do this forever.
-		DEAD:  DW &HDEAD    ; Example of a "local" variable
+	;Robot Moves Forward if Not at middle yet
+	NotAtMiddle:
+		LOAD	FMid
+		OUT		LVELCMD
+		OUT		RVELCMD
+		JUMP  CheckIfMiddle
+
+;Deals with robot rotation at middle position
+AtMiddle:
+	LOAD	ZERO
+	OUT		LVELCMD
+	OUT		RVELCMD
+
+	LOAD	MASK2
+	OUT		SONAREN
+	LOAD	MASK3
+	OUT		SONAREN
+
+	;Check if sensor 2 detects an Object
+	CheckMidObj:
+		CALL 	UpdateMap
+		LOAD	DIST2
+		ADDI	-915
+		JNEG	TwoGot
+		JUMP	Rotate10
+
+	;Given sensor 2 found an object, Check if sensor 3 detects an Object
+	TwoGot:
+		LOAD	ONE
+		LOAD	DIST3
+		ADDI	-915
+		JNEG	ThreeGot
+		JUMP	Rotate10
+
+	;Given sensor 2 and 3 found an object, handle remaining action
+	ThreeGot:
+		LOAD	ZERO
+		OUT		LVELCMD
+		OUT		RVELCMD
+		;Temporarily
+		JUMP	ThreeGot
+
+	;Rotates 12 degrees if object was not in front of object based on s2 and s3
+	Rotate10:
+		LOAD 	ZERO
+		ADDI 	12
+		STORE Angle
+		JUMP	Rotate
+		JUMP	CheckMidObj
+		
+c7FFF: DW &H7FFF
+m16sA: DW 0 ; multiplicand
+m16sB: DW 0 ; multipler
+m16sc: DW 0 ; carry
+mcnt16s: DW 0 ; counter
+mres16sL: DW 0 ; result low
+mres16sH: DW 0 ; result high
+
+Ang0:		DW 90
+Ang1:		DW 44
+Ang2:		DW 12
+Ang3:		DW -12
+Ang4:		DW -44
+Ang5:		DW -90
+Ang6:		DW -144
+Ang7:		DW 144
+
+SensorToCheck: 	DW 0
+SensorAngle:		DW 0
+
+SensorDist: 		DW 0
+
+SensorIndex: 		DW 0
+
+SensorUpdate:		DW 0
+; TODO: Update Array based on Sensor to Check
 
 ;**************************************************
 ; Helper Subroutines
@@ -656,8 +599,6 @@ ControlMovement:
 	; for turning is to multiply the angular error by 4.
 	SHIFT  2
 	STORE  CMAErr      ; hold temporarily
-
-
 	; For this basic control method, simply take the
 	; desired forward velocity and add a differential
 	; velocity for each wheel when turning is needed.
@@ -672,7 +613,8 @@ ControlMovement:
 	OUT    LVELCMD
 
 	RETURN
-	CMAErr: DW 0       ; holds angle error velocity
+
+CMAErr: DW 0       ; holds angle error velocity
 
 CapVel:
 	; cap velocity values for the motors
@@ -697,6 +639,54 @@ Neg:
 	ADDI   1            ; Add one (i.e. negate number)
 Abs_r:
 	RETURN
+	
+	
+; Mult16s:  16x16 -> 32-bit signed multiplication
+; Based on Booth's algorithm.
+; Written by Kevin Johnson.  No licence or copyright applied.
+; Warning: does not work with factor B = -32768 (most-negative number).
+; To use:
+; - Store factors in m16sA and m16sB.
+; - Call Mult16s
+; - Result is stored in mres16sH and mres16sL (high and low words).
+Mult16s:
+		LOADI  0
+		STORE  m16sc        ; clear carry
+		STORE  mres16sH     ; clear result
+		LOADI  16           ; load 16 to counter
+	Mult16s_loop:
+		STORE  mcnt16s
+		LOAD   m16sc        ; check the carry (from previous iteration)
+		JZERO  Mult16s_noc  ; if no carry, move on
+		LOAD   mres16sH     ; if a carry,
+		ADD    m16sA        ;  add multiplicand to result H
+		STORE  mres16sH
+	Mult16s_noc: ; no carry
+		LOAD   m16sB
+		AND    One          ; check bit 0 of multiplier
+		STORE  m16sc        ; save as next carry
+		JZERO  Mult16s_sh   ; if no carry, move on to shift
+		LOAD   mres16sH     ; if bit 0 set,
+		SUB    m16sA        ;  subtract multiplicand from result H
+		STORE  mres16sH
+	Mult16s_sh:
+		LOAD   m16sB
+		SHIFT  -1           ; shift result L >>1
+		AND    c7FFF        ; clear msb
+		STORE  m16sB
+		LOAD   mres16sH     ; load result H
+		SHIFT  15           ; move lsb to msb
+		OR     m16sB
+		STORE  m16sB        ; result L now includes carry out from H
+		LOAD   mres16sH
+		SHIFT  -1
+		STORE  mres16sH     ; shift result H >>1
+		LOAD   mcnt16s
+		ADDI   -1           ; check counter
+		JPOS   Mult16s_loop ; need to iterate 16 times
+		LOAD   m16sB
+		STORE  mres16sL     ; multiplier and result L shared a word
+		RETURN              ; Done
 
 ; Subroutine to wait (block) for 1 second
 Wait1:
