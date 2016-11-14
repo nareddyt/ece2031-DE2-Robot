@@ -56,14 +56,39 @@ WaitForUser:
 ; data for main here
 Main:
 	; TODO initialize array to maxDistance
-
+	
 	; Reset odometer in case wheels move after programming
-	OUT 	RESETPOS
-
+	OUT 	RESETPOS	
+	
 	; Initilize all the vars
 	CALL	InitializeVars
 	CALL	InitializeMap
-
+	
+	;*****************************
+	; TEST CODE BEGIN (will delete later)
+	;*****************************
+	; Test Tagging Function
+	; Robot should travel a distance specified, then retrace steps and go back home
+	LOADI 	610 ; Assume a certain distance
+	STORE 	ObjectYDist ; This variable should have a particular value
+	LOADI 	90
+	STORE 	Angle
+	CALL 	Rotate
+	CALL 	Tag
+	; Test GoHome Function
+	; Tag should call GoHome
+	; Once at home, the robot should go back to Init
+	
+	; Test Alternative GoHome function
+	;LOADI 	610
+	;STORE 	ObjectYDist
+	;CALL  	Tag
+	
+	
+	;*****************************
+	; TEST CODE END
+	;*****************************
+	
 	; Start the initial search
 	CALL	InitialSearch
 
@@ -84,12 +109,12 @@ Die:
 		OUT    SONAREN
 		LOAD   DEAD         ; An indication that we are dead
 		OUT    SSEG2        ; "dEAd" on the LEDs
-
+	
 	; Our version of HALT
 	Forever:
 		JUMP   Forever      ; Do this forever.
 		DEAD:  DW &HDEAD    ; Example of a "local" variable
-
+		
 ; ------------------- ;
 ; END OF CONTROL FLOW ;
 ; ------------------- ;
@@ -103,188 +128,34 @@ InitializeVars:
 		IN		SWITCHES
 		AND		MASK0
 		STORE 	AlongLongWall
-
-		; ObjectsPosTheta: Sets var to 1 if the robot must turn in the positive direction to tag objects.
-		; Note: We turn positive if we are along the short edge for the given use case
-		JZERO	PositiveThetaLoad
-		JPOS	ZeroThetaLoad
-
-	PositiveThetaLoad:
-		LOAD	ONE
-		JUMP	ThetaStore
-
-	ZeroThetaLoad:
-		LOAD	ZERO
-		JUMP 	ThetaStore
-
-	ThetaStore:
-		STORE	ObjectsPosTheta
-
+		
+		; Initialize global variables based on axis
+		JPOS 	LongWallInit
+		LOADI	90
+		STORE 	TagAng
+		LOADI	270
+		STORE 	WallAng
+		LOADI	180
+		STORE 	HomeAng
+		RETURN
+		
+	LongWallInit:
+		LOADI	270
+		STORE 	TagAng
+		LOADI	90
+		STORE 	WallAng
+		LOADI	180
+		STORE 	HomeAng
 		; Return!
 		RETURN
-
-;Variable that stores max dist to update array
-InitMaxDist:			DW 0
-
-;Stores Size of Array to be Filled
-InitArraySize:		DW 0
-
-;Keeps track of index of array
-InitFillCounter:	DW 0
-
-;Used to calculate memory location of index in array
-InitFillIndex:		DW 0
-
-;Initializes Array with Max Dists based on AlongLongWall
+		
 InitializeMap:
-	LOAD		ZERO
-	STORE		InitFillCounter
-	LOAD		AlongLongWall
-	JPOS		InitLong
-	JUMP		InitShort
+	; TODO
+	DW 0
 
-	;If robot on long edge, max dist is MaxShort
-	InitLong:
-	LOAD		MaxLong
-	SHIFT		-5
-	ADDI		1
-	STORE 		InitArraySize
-	LOAD		MaxShort
-	STORE		InitMaxDist
-	JUMP		DistFillLoop
-
-	;If robot on short edge, max dist is MaxLong
-	InitShort:
-	LOAD		MaxShort
-	SHIFT		-5
-	ADDI 		1
-	STORE 		InitArraySize
-	LOAD		MaxLong
-	STORE		InitMaxDist
-
-	;Loop to fill array with the max dist value determined in previous steps
-	DistFillLoop:
-	LOAD		InitFillCounter
-	SUB			InitArraySize
-	JZERO		ArrayFilled
-	JPOS		ArrayFilled
-
-	LOAD		CellArrI
-	ADD			InitFillCounter
-	STORE 		InitFillIndex
-	LOAD		InitMaxDist
-	ISTORE		InitFillIndex
-
-	LOAD		InitFillCounter
-	ADDI		1
-	STORE		InitFillCounter
-	JUMP		DistFillLoop
-
-	ArrayFilled:
-	RETURN
-
-;Position tagged and needs to be updated in occupancy array
-TagPos:				DW 0
-
-;Actually Memory Location in array of tagged position
-TagIndex:			DW 0
-
-;Actually Memory Location of cell being checked left of tagged cell
-LeftTagIndex:	DW 0
-
-;Actually Memory Location of cell being checked right of tagged cell
-RightTagIndex: DW 0
-
-UpdateDist:		DW 0
-TagArraySize:	DW 0
-
-;Updates array based on positon tagged (stored in TagPos)
-TagArrayUpdate:
-	LOAD		AlongLongWall
-	JPOS		UpdLong
-	JUMP		UpdShort
-
-	;If robot on long edge, max dist is MaxShort
-	UpdLong:
-	LOAD		MaxLong
-	SHIFT		-5
-	ADDI		1
-	STORE 	TagArraySize
-	LOAD		MaxShort
-	STORE		UpdateDist
-	JUMP		FillTagP
-
-	;If robot on short edge, max dist is MaxLong
-	UpdShort:
-	LOAD		MaxShort
-	SHIFT		-5
-	ADDI		1
-	STORE 	TagArraySize
-	LOAD		MaxLong
-	STORE		UpdateDist
-
-	;Fills tagged position with max dist
-	FillTagP:
-	LOAD 		TagPos
-	SHIFT		-5
-	ADD			CellArrI
-	STORE		TagIndex
-
-	LOAD		UpdateDist
-	STORE		TagIndex
-
-	;Gets first right index to check
-	LOAD		TagIndex
-	ADDI		1
-	STORE		RightTagIndex
-
-	;Gets first left index to check
-	LOAD		TagIndex
-	ADDI		-1
-	STORE		LeftTagIndex
-
-	;Keeps update left if cells are not equal to max dist
-	KeepLeft:
-	LOAD		LeftTagIndex
-	SUB			CellArrI
-	JNEG		KeepRight
-	ILOAD		LeftTagIndex
-	SUB			UpdateDist
-	JZERO		KeepRight
-
-	LOAD		UpdateDist
-	ISTORE	LeftTagIndex
-
-	;Keeps checking right if cells are not equal to max dist
-	LOAD		LeftTagIndex
-	ADDI		-1
-	STORE		LeftTagIndex
-	JUMP		KeepLeft
-
-	KeepRight:
-	LOAD		CellArrI
-	ADD			TagArraySize
-	SUB			RightTagIndex
-	JNEG		TagUpdated
-	ILOAD		RightTagIndex
-	SUB			UpdateDist
-	JZERO		TagUpdated
-
-	LOAD		UpdateDist
-	ISTORE	RightTagIndex
-
-	LOAD		RightTagIndex
-	ADDI		1
-	STORE		RightTagIndex
-	JUMP		KeepRight
-
-	TagUpdated:
-	RETURN
-	
-	
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
-
+		
 		; Enable sonar sensors 2 and 3 to make sure we don't run into anything
 		; TODO do this with interrupts instead of just checking every loop cycle
 		LOAD	MASK2
@@ -338,7 +209,9 @@ InitialSearch:
 	; We are at the max bound of the wall now
 	DoneForward:
 		; Stop the wheels
-		CALL	StopMovement
+		LOAD	ZERO
+		OUT		LVELCMD
+		OUT		RVELCMD
 
 		; Rotate 180 (direction doesn't matter)
 		LOAD	Deg180
@@ -348,7 +221,6 @@ InitialSearch:
 		; Return to main
 		RETURN
 
-
 ; Updates the "map" with current readings from the corresponding ultrasonic sensors
 ; Uses basic thresholding, filtering, and data aggregation techniques
 UpdateMap:
@@ -356,7 +228,7 @@ UpdateMap:
  	XOR 	XDir
 	JPOS 	ELHS ; If 1, robot is set up for long axis traversal
 	JZERO  	ERHS ; If 0, robot setup values for short axis traverse
-
+	
 	; Sonar sensor 5 is facing the objects, so turn it on and read it's value
 	ERHS:
 		; Read value from the sonar sensor and store in Cell
@@ -364,11 +236,11 @@ UpdateMap:
 	 	OUT 	SONAREN
 	 	IN 		DIST5
 	 	STORE	Cell
-
+	 	
 	 	; Disable the sonar sensor
 	 	; FIXME disables 2 and 3 as well
 	 	CALL	KillSonars
-
+	 	
 	 	; Update the value in the cell and return!
 		CALL	UpdateCell
 	 	RETURN
@@ -380,139 +252,54 @@ UpdateMap:
 		OUT 	SONAREN
 		IN 		DIST0
 		STORE	Cell
-
+	 	
 	 	; Disable the sonar sensor
 	 	; FIXME disables 2 and 3 as well
 	 	CALL	KillSonars
-
+	 	
 	 	; Update the value in the cell and return!
 	 	CALL	UpdateCell
 		RETURN
 
 ; Update the cell in the array based on the value stored at cell and the current position of the robot
-; Filtering and thresholding happens here!
+; Filtering and thresholding happens here! 
 UpdateCell:
 
 	; Read the current x pos of the robot
  	IN		XPOS
-
- 	; Divide the x position by 32 (shift by 5) to get the current cell in the array
-	SHIFT 	-5
+ 	
+ 	; CHECKME Divide the x position by 32 (shift by 5) to get the current cell in the array
+	SHIFT 	NEGFIVE
 	
 	; Add the value of the starting index of the array. This maps us to the proper index for the corresponding x position
 	ADD		CellArrI
-
+	
 	; We now have the address of the corresponding cell. Store it in a temp variable
 	STORE 	XposIndex
-
+	
 	; Do the filtering and aggregation
 	CALL	FilterAndAggregate
-
+	
 	; Return!
 	RETURN
 
 ;Subroutine that filters the array created in update map
 FilterAndAggregate:
-		; Figure out what wall we are at
-		LOAD	AlongLongWall
-		JZERO	FilterLoadLong
-		JPOS	FilterLoadShort
-		
-	; We are along the short wall, so load the long distance as a threshold
-	FilterLoadLong:
-		LOAD	MaxLong
-		JUMP	FilterData
+	;TODO not every cell in the array will have a reading, we need to figure how to filter the readings to produce continuous object
+	;Account for two object being at the same distance away from wall
+	;Account for one object being behind another
+	RETURN
 	
-	; We are along the long wall, so load the short distance as a threshold
-	FilterLoadShort:
-		LOAD	MaxShort
-		JUMP	FilterData
-	
-	FilterData:
-		; We loaded a max value for the filter
-		; SUB the data stored in the temp variable cell. If is in the range only if result > 0
-		SUB		Cell
-		JZERO	FilterReturn
-		JNEG	FilterReturn
-		
-		; Sonar value passed the filter! We can now aggregate it with the data at the corresponding cell.
-		; Load the value in the current cell position in the array
-		ILOAD	XposIndex
-		
-		; Aggregate it with the new data: (oldVal + newCell) / 2
-		; CHECKME can we find a better aggregation algorithm (with the given limitations and datastructure)?
-		ADD		Cell
-		SHIFT	-1
-		
-		; Store it back in the corresponding index
-		ISTORE	XposIndex
-		
-	FilterReturn:
-		RETURN
-
 ; Finds the closest object (relative to the wall) based on the map
 ; Stores the x pos of the closest object in ObjectXDist
 ; Stores the y pos of the closest object in ObjectYDist
 FindClosestObject:
-		; TODO traverse through the array and get the xPos for the closest object
-		; TODO store in ObjectXDist, store distance in ObjectYDist
-		
-		; Set the counter to 0
-		LOAD		ZERO
-		STORE		InitFillCounter
-		
-		; Store the max long distance in the ObjectYDist
-		LOAD		MaxLong
-		STORE		ObjectYDist
-		
-	;Loop to fill array with the max dist value determined in previous steps
-	ClosestDistLoop:
-		LOAD		InitFillCounter
-		SUB			InitArraySize
-		JZERO		ClosestDone
-		JPOS		ClosestDone
-	
-		LOAD		CellArrI
-		ADD			InitFillCounter
-		STORE 		InitFillIndex
-		
-		LOAD		InitFillCounter
-		ADDI		1
-		STORE		InitFillCounter
-		JUMP		ClosestDistLoop
-		
-		; Check if it is the new closest
-		ILOAD		InitFillIndex
-		SUB			ObjectYDist
-		JNEG		NewClosestFound
-		JPOS		ClosestDistLoop
-		JZERO		ClosestDistLoop
-	
-	NewClosestFound:
-		; Store the y distance
-		ILOAD		InitFillIndex
-		STORE		ObjectYDist
-		
-		; Extrapolate the x position
-		LOAD		InitFillCounter
-		SHIFT		5
-		ADDI		-15
-		STORE		ObjectXDist
-		
-		; Go back to looping
-		JUMP		ClosestDistLoop
-
-	ClosestDone:
-		; DEBUG output closest x position
-		LOAD		ObjectXDist
-		OUT			SSEG1
-		
-		; DEBUG output y distance
-		LOAD		ObjectYDist
-		OUT			SSEG2
-		
-		; Return
-		RETURN
+	; TODO traverse through the array and get the xPos for the closest object
+	; TODO store in ObjectXDist, store distance in ObjectYDist
+	LOAD	TEN
+	STORE	ObjectXDist
+	STORE	ObjectYDist
+	RETURN
 
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
@@ -521,7 +308,7 @@ FindAndTagClosestObject:
 
 		; Call method to get information about the closest object
 		CALL	FindClosestObject
-
+		
 		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist!
 		; We need to move to the xPos
 
@@ -576,33 +363,37 @@ FindAndTagClosestObject:
 
 	;If robot is not yet at desired X position
 	KeepGoingInDirection:
-
+		
 		; FIXME tweak the speeds
 		LOAD	ZERO
 		STORE	DTheta
 		LOAD	FMid
 		STORE	DVel
 		CALL	ControlMovement
-
+	
 		; Check the bounds again!
 		JUMP	MoveLoop
 
 	AtObjectX:
 		; Stop the robot
-		CALL	StopMovement
+		LOAD	ZERO
+		OUT		LVELCMD
+		OUT		RVELCMD
 	
 		; TODO turn for Randy's tagging
 		; TODO call Randy's tag method
-		; TODO return to home
+		; Call Tag
+		; NOTE: My tag method calls GoHome method
+		; NOTE2: My GoHome method calls AtHome method
+		; NOTE3: AtHome method calls Init
 
 		; Return to main
 		RETURN
 
 ; We are back at home now
 BackAtHome:
-	; TODO wait for user input to start again
-	; For now just call die
-	CALL 	Die
+	; Wait for user input to start again
+	JUMP 	Init
 	RETURN
 
 ; GoHome function will have the robot go home after tagging
@@ -611,16 +402,16 @@ GoHome:
 	; Go towards wall then stop when close
 	CALL 	GoToWall
 	; Determine which way to rotate
-	LOADI 	90
-	STORE 	Angle
-	LOAD 	ObjectsPosTheta
-	JZERO 	HomeRotate
 	LOADI 	-90
+	STORE 	Angle
+	LOAD 	AlongLongWall
+	JZERO 	HomeRotate
+	LOADI 	90
 	STORE 	Angle
 HomeRotate:
 	; Rotate to face wall then go home
 	CALL  	Rotate
-	CALL 	GoToWall
+	CALL 	GoToWall2
 	JUMP 	BackAtHome
 
 ; Tag function will travel to an object X distance away, tag it, and rotate to face the wall
@@ -632,7 +423,7 @@ Tag:
 	IN   	YPOS
 	STORE 	EncoderY
 	; Control Movement Variables
-	LOADI 	THETA
+	LOAD 	TagAng
 	STORE 	DTheta
 	LOAD 	FMid
 	STORE 	DVel
@@ -644,7 +435,7 @@ TagIt:
 	IN 		YPOS
 	CALL 	Abs
 	SUB 	EncoderY
-	SUB 	Cell
+	SUB 	ObjectYDist
 	ADDI 	-10
 	JNEG 	TagIt
 	; Prepare to move backwards a little
@@ -667,7 +458,7 @@ MoveBack:
 	LOADI 	180
 	CALL 	Rotate
 	CALL 	GoHome
-
+	
 ;Goes to middle and searches for object to go towards
 Middle:			DW 2090
 GoToMiddleSearch:
@@ -729,7 +520,7 @@ AtMiddle:
 		STORE Angle
 		JUMP	Rotate
 		JUMP	CheckMidObj
-
+		
 c7FFF: DW &H7FFF
 m16sA: DW 0 ; multiplicand
 m16sB: DW 0 ; multipler
@@ -765,7 +556,7 @@ KillSonars:
 	LOAD	ZERO
 	OUT		SONAREN
 	RETURN
-
+	
 ; Stops robot movement
 StopMovement:
 	LOAD 	ZERO
@@ -856,13 +647,15 @@ Rotate:
 
 ; Function tells DE2Bot to travel straight until wall is detected
 ; Uses sensors 2 and 3 to detect wall
+; GoToWall travels to the wall with specified angles
+; GoToWall2 travels towards home with a specified angle
 GoToWall:
 	; Initialize sensors
 	LOAD 	MASK2
 	OR 		MASK3
 	OUT 	SONAREN
 	; Initialize movement variables
-	IN  	THETA
+	LOAD  	WallAng
 	STORE 	DTheta
 	LOAD 	FMid
 	STORE 	DVel
@@ -876,6 +669,19 @@ CheckWall:
 	ADD 	WallThresh 	; 20 cm ~= 8 inches
 	JPOS 	CheckWall
 	CALL 	StopMovement 	; stops movement
+	CALL 	KillSonars
+	RETURN
+GoToWall2:
+	; Initialize sensors
+	LOAD 	MASK2
+	OR 		MASK3
+	OUT 	SONAREN
+	; Initialize movement variables
+	LOAD  	HomeAng
+	STORE 	DTheta
+	LOAD 	FMid
+	STORE 	DVel
+	JUMP 	CheckWall
 
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
@@ -935,8 +741,8 @@ Neg:
 	ADDI   1            ; Add one (i.e. negate number)
 Abs_r:
 	RETURN
-
-
+	
+	
 ; Mult16s:  16x16 -> 32-bit signed multiplication
 ; Based on Booth's algorithm.
 ; Written by Kevin Johnson.  No licence or copyright applied.
@@ -1074,8 +880,206 @@ GetBattLvl:
 ; using Taylor series -- will be accurate between -pi/2 and pi/2
 
 ; NEED MULT16S, lowbyte DW &HFF, DIV16S, neg
-; TODO removed cause errors :(
 
+; input THETA as degree
+; output x_val as sine of THETA
+; using Taylor series -- will be accurate between -pi/2 and pi/2
+
+; NEED MULT16S, lowbyte DW &HFF, DIV16S, neg
+COSINE:
+		LOAD	THETA
+		STORE 	TCOPY
+		LOAD 	THETA
+		ADDI 	-180
+		JNEG 	NEGSINE			; if THETA is in third or fourth quadrant, sine value will be output as negative
+		ADDI	180
+		ADDI 	-90
+		JPOS	QUAD2
+		ADDI	90
+THETAQUAD2:
+THETANEGSINE:
+		LOAD 	THETA
+		STORE 	m16sA
+		STORE 	m16sB
+		CALL	Mult16s
+		LOAD    mres16sH
+		SHIFT   8            ; move high word of result up 8 bits
+		STORE   mres16sH
+		LOAD    mres16sL
+		SHIFT   -8           ; move low word of result down 8 bits
+		AND     LowByte
+		OR      mres16sH     ; combine high and low words of result
+		STORE	THETAtemp2	 ; equivalent to THETA ^ 2
+		STORE	THETA2
+		SHIFT	-1			 ; divide by 2
+		CALL 	Neg
+		STORE	THETA2
+		
+		LOAD 	THETAtemp
+		STORE 	m16sA
+		STORE 	m16sB	
+		CALL	Mult16s
+		LOAD    mres16sH
+		SHIFT   8            ; move high word of result up 8 bits
+		STORE   mres16sH
+		LOAD    mres16sL
+		SHIFT   -8           ; move low word of result down 8 bits
+		AND     LowByte
+		OR      mres16sH     ; combine high and low words of resultv
+		STORE 	THETAtemp4	 ; equivalent to THETA ^ 4
+		STORE 	THETA4
+		
+		LOADI 	2
+		SHIFT	5			 ; immediate of 2 ^ 5 = 32
+		ADDI 	-8			 ; 32 - 8 = 24
+		STORE 	d16sD
+		LOAD 	THETA4
+		STORE 	d16sN
+		CALL	Div16s
+		LOAD	dres16sQ
+		STORE 	THETA4
+		
+		LOAD 	THETAtemp4	 ; performing THETA^6
+		STORE 	m16sA
+		LOAD	THETAtemp2
+		STORE 	m16sB
+		CALL	Mult16s
+		LOAD    mres16sH
+		SHIFT   8            ; move high word of result up 8 bits
+		STORE   mres16sH
+		LOAD    mres16sL
+		SHIFT   -8           ; move low word of result down 8 bits
+		AND     LowByte
+		OR      mres16sH     ; combine high and low words of result
+		STORE	THETA6		 ; equivalent to THETA ^ 6
+		
+		LOADI	2
+		SHIFT	10			 ; immediate of 1024
+		ADDI	-304		 ; 1024 - 304 = 720
+		LOAD 	d16sD
+		LOAD 	THETA6
+		STORE 	d16sN
+		CALL	Div16s
+		LOAD	dres16sQ
+		CALL	Neg
+		STORE 	THETA6
+		
+		LOADI	1
+		ADD		THETA2
+		ADD 	THETA4
+		ADD		THETA6
+		STORE	x_val
+		
+		LOAD 	TCOPY
+		ADDI	-180
+		JPOS	NEGYVAL
+		
+		STORE	x_val
+		RETURN	
+		
+NEGYVAL:	
+		LOAD 	x_val
+		CALL	Neg			; negate x_val if in quadrants III o IV
+		STORE 	x_val
+		RETURN
+		
+QUAD2:	
+		LOAD 	THETA
+		ADDI	-90
+		JUMP	THETAQUAD2		
+		
+NEGSINE:
+		LOADI	360
+		SUB		THETA
+		JUMP	THETANEGSINE
+
+
+
+; SINE function
+; input: distance from the object (DISTX) <based on the sonar being used, THETA
+	; sin(theta) = O/H = x_val/DISTX
+; output: y_val
+; NEEDED: COSINE
+
+SINE:
+		LOAD	THETA
+		ADDI	-90		; finding other angle
+		STORE 	THETA
+ 		CALL 	COSINE
+		LOAD 	x_val	; OUTPUT OF COSINE
+		STORE 	y_val	; by finding the cosine of the other angle, the sine of the original triangle can be found
+	
+		STORE 	d16sN
+		LOAD  	DISTX
+		STORE 	d16sN
+		CALL	Div16s
+		LOAD	dres16sQ
+		STORE 	y_val
+		RETURN
+
+; Div16s:  16/16 -> 16 R16 signed division
+; Written by Kevin Johnson.  No licence or copyright applied.
+; Warning: results undefined if denominator = 0.
+; To use:
+; - Store numerator in d16sN and denominator in d16sD.
+; - Call Div16s
+; - Result is stored in dres16sQ and dres16sR (quotient and remainder).
+; Requires Abs subroutine
+Div16s:
+	LOADI  0
+	STORE  dres16sR     ; clear remainder result
+	STORE  d16sC1       ; clear carry
+	LOAD   d16sN
+	XOR    d16sD
+	STORE  d16sS        ; sign determination = N XOR D
+	LOADI  17
+	STORE  d16sT        ; preload counter with 17 (16+1)
+	LOAD   d16sD
+	CALL   Abs          ; take absolute value of denominator
+	STORE  d16sD
+	LOAD   d16sN
+	CALL   Abs          ; take absolute value of numerator
+	STORE  d16sN
+Div16s_loop:
+	LOAD   d16sN
+	SHIFT  -15          ; get msb
+	AND    One          ; only msb (because shift is arithmetic)
+	STORE  d16sC2       ; store as carry
+	LOAD   d16sN
+	SHIFT  1            ; shift <<1
+	OR     d16sC1       ; with carry
+	STORE  d16sN
+	LOAD   d16sT
+	ADDI   -1           ; decrement counter
+	JZERO  Div16s_sign  ; if finished looping, finalize result
+	STORE  d16sT
+	LOAD   dres16sR
+	SHIFT  1            ; shift remainder
+	OR     d16sC2       ; with carry from other shift
+	SUB    d16sD        ; subtract denominator from remainder
+	JNEG   Div16s_add   ; if negative, need to add it back
+	STORE  dres16sR
+	LOADI  1
+	STORE  d16sC1       ; set carry
+	JUMP   Div16s_loop
+Div16s_add:
+	ADD    d16sD        ; add denominator back in
+	STORE  dres16sR
+	LOADI  0
+	STORE  d16sC1       ; clear carry
+	JUMP   Div16s_loop
+Div16s_sign:
+	LOAD   d16sN
+	STORE  dres16sQ     ; numerator was used to hold quotient result
+	LOAD   d16sS        ; check the sign indicator
+	JNEG   Div16s_neg
+	RETURN
+Div16s_neg:
+	LOAD   dres16sQ     ; need to negate the result
+	CALL   Neg
+	STORE  dres16sQ
+	RETURN	
+	
 ;***************************************************************
 ;* Variables
 ;***************************************************************
@@ -1084,7 +1088,7 @@ WaitTime:			DW 0
 Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
-ErrMargin: 			DW 4
+ErrMargin: 			DW 5
 XDir:				DW 0		; Current direction on the X access robot is moving. 1 = right, 0 = left
 ObjectXDist:		DW 0 		; The x position of the next closest object
 ObjectYDist:		DW 0		; The absolute value of the y position of the next closest object
@@ -1095,20 +1099,30 @@ EncoderY: 			DW 0		; Stores current value of encoder in Y direction
 WallThresh: 		DW -200 	; Defines distance away from wall before DE2Bot should stop moving (used in GoHome function)
 Cell: 				DW 0		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
-CellArrI:   		DW &H64c	; Memory location (starting index) of the cell array
+CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
-FilterVal:			DW 0		; Updated in the code to set up the max filter
-
-y_val:			DW 0
-THETAtemp2:		DW 0
-THETAtemp4:		DW 0
-THETA2:			DW 0
-THETA4:			DW 0
-THETA6:			DW 0
-TCOPY:			DW 0
-CosSum:			DW 0
-
-
+TagAng: 			DW 0		; Tells robot travel ang when tagging
+WallAng:			DW 0		; Tells robot travel ang when going to wall
+HomeAng:			DW 0		; Tells robot travel ang when going home
+y_val:				DW 0 
+THETAtemp:			DW 0
+distx:				DW 0
+THETAtemp2:			DW 0 
+THETAtemp4:			DW 0
+THETA2:				DW 0 
+THETA4:				DW 0
+THETA6:				DW 0 
+TCOPY:				DW 0
+CosSum:				DW 0
+x_val:				DW 0
+d16sN: 				DW 0 ; numerator
+d16sD: 				DW 0 ; denominator
+d16sS: 				DW 0 ; sign value
+d16sT:			    DW 0 ; temp counter
+d16sC1:				DW 0 ; carry value
+d16sC2: 			DW 0 ; carry value
+dres16sQ: 			DW 0 ; quotient result
+dres16sR: 			DW 0 ; remainder result
 ;***************************************************************
 ;* Constants
 ;* (though there is nothing stopping you from writing to these)
@@ -1210,6 +1224,14 @@ LIN:      EQU &HC9
 ;* The x-array will inititialize at a location sufficiently far away from other instructions
 ;* Allows for dynamic length and known locations of words
 ;***************************************************************
+		 
 
-ORG     &H64c ; Start at location 1100 for the occupancy array
-DW		0	; Array start	
+ORG     &H44C ; Start at location 1100 for the occupancy array
+
+
+
+
+
+
+
+
