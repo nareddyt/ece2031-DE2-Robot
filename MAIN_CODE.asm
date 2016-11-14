@@ -186,7 +186,8 @@ InitialSearch:
 
 UpdateMap:
 	; Traverse an axis,and store the distance recieved (represents 32mm increment)
- 	LOAD 	XDir
+	LOAD	AlongLongWall
+ 	XOR 	XDir
 	JPOS 	ELHS ; If bot is moving right, turn on sensors on the left side
 	JZERO  	ERHS ; Same, but converse
 
