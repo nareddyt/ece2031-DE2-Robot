@@ -90,9 +90,9 @@ Die:
 		JUMP   Forever      ; Do this forever.
 		DEAD:  DW &HDEAD    ; Example of a "local" variable
 		
-; =================== ;
+; ------------------- ;
 ; END OF CONTROL FLOW ;
-; =================== ;
+; ------------------- ;
 
 ;**************************************************
 ; Important Subroutines
@@ -199,14 +199,12 @@ InitialSearch:
 ; Uses basic thresholding, filtering, and data aggregation techniques
 UpdateMap:
  	LOAD 	AlongLongWall
-	JPOS 	LGO ; If 1, robot is set up for long axis traversal
-	JZERO  	SGO ; If 0, robot setup values for short axis traverse
-
-	; FIXME turn on sensors based on which axis it is on AND the var XDir
-	; If XDir is 0, then we want to reverse which sensors are used (as the robot is backward)
+ 	XOR 	XDir
+	JPOS 	ELHS ; If 1, robot is set up for long axis traversal
+	JZERO  	ERHS ; If 0, robot setup values for short axis traverse
 	
 	; Sonar sensor 5 is facing the objects, so turn it on and read it's value
-	LGO:
+	ERHS:
 		; Read value from the sonar sensor and store in Cell
 	 	LOAD	MASK5
 	 	OUT 	SONAREN
@@ -215,15 +213,14 @@ UpdateMap:
 	 	
 	 	; Disable the sonar sensor
 	 	; FIXME disables 2 and 3 as well
-	 	LOAD	ZERO
-	 	OUT		SONAREN
+	 	CALL	KillSonars
 	 	
 	 	; Update the value in the cell and return!
 		CALL	UpdateCell
 	 	RETURN
 
-	; Sonar sensor0 is facing the objects, so turn it on and read it's value
-	SGO:
+	; Sonar sensor 0 is facing the objects, so turn it on and read it's value
+	ELHS:
 		; Read value from the sonar sensor and store in Cell
 		LOAD	MASK0
 		OUT 	SONAREN
@@ -232,8 +229,7 @@ UpdateMap:
 	 	
 	 	; Disable the sonar sensor
 	 	; FIXME disables 2 and 3 as well
-	 	LOAD	ZERO
-	 	OUT		SONAREN
+	 	CALL	KillSonars
 	 	
 	 	; Update the value in the cell and return!
 	 	CALL	UpdateCell
@@ -527,7 +523,12 @@ SensorUpdate:		DW 0
 ;**************************************************
 ; Helper Subroutines
 ;**************************************************
-
+KillSonars:
+	;stop all sensors
+	LOAD	ZERO
+	OUT		SONAREN
+	RETURN
+	
 ; Stops robot movement
 StopMovement:
 	LOAD 	ZERO
@@ -830,6 +831,14 @@ GetBattLvl:
 	IN     I2C_DATA    ; get the returned data
 	RETURN
 
+; Subroutine for Cosine of an angle
+; input THETA as degree
+; output x_val as cosine of THETA
+; using Taylor series -- will be accurate between -pi/2 and pi/2
+
+; NEED MULT16S, lowbyte DW &HFF, DIV16S, neg
+; TODO removed cause errors :(	
+
 ;***************************************************************
 ;* Variables
 ;***************************************************************
@@ -851,6 +860,15 @@ Cell: 				DW 0		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
 CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
+
+y_val:			DW 0 
+THETAtemp2:		DW 0 
+THETAtemp4:		DW 0
+THETA2:			DW 0 
+THETA4:			DW 0
+THETA6:			DW 0 
+TCOPY:			DW 0
+CosSum:			DW 0
 
 
 ;***************************************************************
@@ -954,5 +972,6 @@ LIN:      EQU &HC9
 ;* The x-array will inititialize at a location sufficiently far away from other instructions
 ;* Allows for dynamic length and known locations of words
 ;***************************************************************
-		 ORG     &H44C ; Start at location 1100 for the occupancy array
-OcArray: DW &H7FFF
+		 
+
+ORG     &H44C ; Start at location 1100 for the occupancy array
