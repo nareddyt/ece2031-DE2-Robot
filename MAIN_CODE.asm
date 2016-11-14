@@ -243,7 +243,7 @@ UpdateCell:
  	IN		XPOS
  	
  	; CHECKME Divide the x position by 32 (shift by 5) to get the current cell in the array
-	SHIFT 	NEGFIVE
+	SHIFT 	-5
 	
 	; Add the value of the starting index of the array. This maps us to the proper index for the corresponding x position
 	ADD		CellArrI
@@ -259,10 +259,45 @@ UpdateCell:
 
 ;Subroutine that filters the array created in update map
 FilterAndAggregate:
-	;TODO not every cell in the array will have a reading, we need to figure how to filter the readings to produce continuous object
-	;Account for two object being at the same distance away from wall
-	;Account for one object being behind another
-	RETURN
+		;TODO not every cell in the array will have a reading, we need to figure how to filter the readings to produce continuous object
+		;Account for two object being at the same distance away from wall
+		;Account for one object being behind another
+		
+		; Figure out what wall we are at
+		LOAD	AlongLongWall
+		JZERO	FilterLoadLong
+		JPOS	FilterLoadShort
+		
+	; We are along the short wall, so load the long distance as a threshold
+	FilterLoadLong:
+		LOAD	MaxLong
+		JUMP	FilterData
+	
+	; We are along the long wall, so load the short distance as a threshold
+	FilterLoadShort:
+		LOAD	MaxShort
+		JUMP	FilterData
+	
+	FilterData:
+		; We loaded a max value for the filter
+		; SUB the data stored in the temp variable cell. If is in the range only if result > 0
+		SUB		Cell
+		JZERO	FilterReturn
+		JNEG	FilterReturn
+		
+		; Sonar value passed the filter! We can now aggregate it with the data at the corresponding cell.
+		; Load the value in the current cell position in the array
+		ILOAD	XposIndex
+		
+		; Average it with the new data: (oldVal + newCell) / 2
+		ADD		Cell
+		SHIFT	-1
+		
+		; Store it back in the corresponding index
+		ISTORE	XposIndex
+		
+	FilterReturn:
+		RETURN
 	
 ; Finds the closest object (relative to the wall) based on the map
 ; Stores the x pos of the closest object in ObjectXDist
@@ -860,6 +895,7 @@ Cell: 				DW 0		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
 CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
+FilterVal:			DW 0		; Updated in the code to set up the max filter
 
 y_val:			DW 0 
 THETAtemp2:		DW 0 
