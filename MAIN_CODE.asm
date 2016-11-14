@@ -56,14 +56,14 @@ WaitForUser:
 ; data for main here
 Main:
 	; TODO initialize array to maxDistance
-	
+
 	; Reset odometer in case wheels move after programming
-	OUT 	RESETPOS	
-	
+	OUT 	RESETPOS
+
 	; Initilize all the vars
 	CALL	InitializeVars
 	CALL	InitializeMap
-	
+
 	; Start the initial search
 	CALL	InitialSearch
 
@@ -84,12 +84,12 @@ Die:
 		OUT    SONAREN
 		LOAD   DEAD         ; An indication that we are dead
 		OUT    SSEG2        ; "dEAd" on the LEDs
-	
+
 	; Our version of HALT
 	Forever:
 		JUMP   Forever      ; Do this forever.
 		DEAD:  DW &HDEAD    ; Example of a "local" variable
-		
+
 ; ------------------- ;
 ; END OF CONTROL FLOW ;
 ; ------------------- ;
@@ -103,33 +103,33 @@ InitializeVars:
 		IN		SWITCHES
 		AND		MASK0
 		STORE 	AlongLongWall
-	
+
 		; ObjectsPosTheta: Sets var to 1 if the robot must turn in the positive direction to tag objects.
 		; Note: We turn positive if we are along the short edge for the given use case
 		JZERO	PositiveThetaLoad
 		JPOS	ZeroThetaLoad
-		
+
 	PositiveThetaLoad:
 		LOAD	ONE
 		JUMP	ThetaStore
-		
+
 	ZeroThetaLoad:
 		LOAD	ZERO
 		JUMP 	ThetaStore
-		
+
 	ThetaStore:
 		STORE	ObjectsPosTheta
-	
+
 		; Return!
 		RETURN
-		
+
 InitializeMap:
 	; TODO
 	DW 0
 
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
-		
+
 		; Enable sonar sensors 2 and 3 to make sure we don't run into anything
 		; TODO do this with interrupts instead of just checking every loop cycle
 		LOAD	MASK2
@@ -193,6 +193,166 @@ InitialSearch:
 		; Return to main
 		RETURN
 
+
+	;Variable that stores max dist to update array
+	InitMaxDist:			DW 0
+
+	;Stores Size of Array to be Filled
+	InitArraySize:		DW 0
+
+	;Keeps track of index of array
+	InitFillCounter:	DW 0
+
+	;Used to calculate memory location of index in array
+	InitFillIndex:		DW 0
+
+	;Initializes Array with Max Dists based on AlongLongWall
+	InitArray:
+		LOAD		ZERO
+		STORE		InitFillCounter
+		LOAD		AlongLongWall
+		JPOS		InitLong
+		JUMP		InitShort
+
+		;If robot on long edge, max dist is MaxShort
+		InitLong:
+		LOAD		MaxLong
+		SHIFT		-5
+		ADDI		1
+		STORE 	InitArraySize
+		LOAD		MaxShort
+		STORE		InitMaxDist
+		JUMP		DistFillLoop
+
+		;If robot on short edge, max dist is MaxLong
+		InitShort:
+		LOAD		MaxShort
+		SHIFT		-5
+		ADDI 		1
+		STORE 	InitArraySize
+		LOAD		MaxLong
+		STORE		InitMaxDist
+
+		;Loop to fill array with the max dist value determined in previous steps
+		DistFillLoop:
+		LOAD		InitFillCounter
+		SUB			InitArraySize
+		JZERO		ArrayFilled
+		JPOS		ArrayFilled
+
+		LOAD		CellArrI
+		ADD			InitFillCounter
+		STORE 	InitFillIndex
+		LOAD		InitMaxDist
+		ISTORE	InitFillIndex
+
+		LOAD		InitFillCounter
+		ADDI		1
+		STORE		InitFillCounter
+		JUMP		DistFillLoop
+
+		ArrayFilled:
+		RETURN
+
+	;Position tagged and needs to be updated in occupancy array
+	TagPos:				DW 0
+
+	;Actually Memory Location in array of tagged position
+	TagIndex:			DW 0
+
+	;Actually Memory Location of cell being checked left of tagged cell
+	LeftTagIndex:	DW 0
+
+	;Actually Memory Location of cell being checked right of tagged cell
+	RightTagIndex: DW 0
+
+	UpdateDist:		DW 0
+	TagArraySize:	DW 0
+
+	;Updates array based on positon tagged (stored in TagPos)
+	TagArrayUpdate:
+		LOAD		AlongLongWall
+		JPOS		UpdLong
+		JUMP		UpdShort
+
+		;If robot on long edge, max dist is MaxShort
+		UpdLong:
+		LOAD		MaxLong
+		SHIFT		-5
+		ADDI		1
+		STORE 	TagArraySize
+		LOAD		MaxShort
+		STORE		UpdateDist
+		JUMP		FillTagP
+
+		;If robot on short edge, max dist is MaxLong
+		UpdShort:
+		LOAD		MaxShort
+		SHIFT		-5
+		ADDI		1
+		STORE 	TagArraySize
+		LOAD		MaxLong
+		STORE		UpdateDist
+
+		;Fills tagged position with max dist
+		FillTagP:
+		LOAD 		TagPos
+		SHIFT		-5
+		ADD			CellArrI
+		STORE		TagIndex
+
+		LOAD		UpdateDist
+		STORE		TagIndex
+
+		;Gets first right index to check
+		LOAD		TagIndex
+		ADDI		1
+		STORE		RightTagIndex
+
+		;Gets first left index to check
+		LOAD		TagIndex
+		ADDI		-1
+		STORE		LeftTagIndex
+
+		;Keeps update left if cells are not equal to max dist
+		KeepLeft:
+		LOAD		LeftTagIndex
+		SUB			CellArrI
+		JNEG		KeepRight
+		ILOAD		LeftTagIndex
+		SUB			UpdateDist
+		JZERO		KeepRight
+
+		LOAD		UpdateDist
+		ISTORE	LeftTagIndex
+
+		;Keeps checking right if cells are not equal to max dist
+		LOAD		LeftTagIndex
+		ADDI		-1
+		STORE		LeftTagIndex
+		JUMP		KeepLeft
+
+		KeepRight:
+		LOAD		CellArrI
+		ADD			TagArraySize
+		SUB			RightTagIndex
+		JNEG		TagUpdated
+		ILOAD		RightTagIndex
+		SUB			UpdateDist
+		JZERO		TagUpdated
+
+		LOAD		UpdateDist
+		ISTORE	RightTagIndex
+
+		LOAD		RightTagIndex
+		ADDI		1
+		STORE		RightTagIndex
+		JUMP		KeepRight
+
+		TagUpdated:
+		RETURN
+
+
 ; Updates the "map" with current readings from the corresponding ultrasonic sensors
 ; Uses basic thresholding, filtering, and data aggregation techniques
 UpdateMap:
@@ -200,7 +360,7 @@ UpdateMap:
  	XOR 	XDir
 	JPOS 	ELHS ; If 1, robot is set up for long axis traversal
 	JZERO  	ERHS ; If 0, robot setup values for short axis traverse
-	
+
 	; Sonar sensor 5 is facing the objects, so turn it on and read it's value
 	ERHS:
 		; Read value from the sonar sensor and store in Cell
@@ -208,11 +368,11 @@ UpdateMap:
 	 	OUT 	SONAREN
 	 	IN 		DIST5
 	 	STORE	Cell
-	 	
+
 	 	; Disable the sonar sensor
 	 	; FIXME disables 2 and 3 as well
 	 	CALL	KillSonars
-	 	
+
 	 	; Update the value in the cell and return!
 		CALL	UpdateCell
 	 	RETURN
@@ -224,34 +384,34 @@ UpdateMap:
 		OUT 	SONAREN
 		IN 		DIST0
 		STORE	Cell
-	 	
+
 	 	; Disable the sonar sensor
 	 	; FIXME disables 2 and 3 as well
 	 	CALL	KillSonars
-	 	
+
 	 	; Update the value in the cell and return!
 	 	CALL	UpdateCell
 		RETURN
 
 ; Update the cell in the array based on the value stored at cell and the current position of the robot
-; Filtering and thresholding happens here! 
+; Filtering and thresholding happens here!
 UpdateCell:
 
 	; Read the current x pos of the robot
  	IN		XPOS
- 	
- 	; CHECKME Divide the x position by 32 (shift by 5) to get the current cell in the array
+
+ 	; Divide the x position by 32 (shift by 5) to get the current cell in the array
 	SHIFT 	-5
 	
 	; Add the value of the starting index of the array. This maps us to the proper index for the corresponding x position
 	ADD		CellArrI
-	
+
 	; We now have the address of the corresponding cell. Store it in a temp variable
 	STORE 	XposIndex
-	
+
 	; Do the filtering and aggregation
 	CALL	FilterAndAggregate
-	
+
 	; Return!
 	RETURN
 
@@ -293,7 +453,7 @@ FilterAndAggregate:
 		
 	FilterReturn:
 		RETURN
-	
+
 ; Finds the closest object (relative to the wall) based on the map
 ; Stores the x pos of the closest object in ObjectXDist
 ; Stores the y pos of the closest object in ObjectYDist
@@ -319,7 +479,7 @@ FindAndTagClosestObject:
 
 		; Call method to get information about the closest object
 		CALL	FindClosestObject
-		
+
 		; Now, the x pos of the closest object is stored in ObjectXDist, the y pos is in ObjectYDist!
 		; We need to move to the xPos
 
@@ -374,14 +534,14 @@ FindAndTagClosestObject:
 
 	;If robot is not yet at desired X position
 	KeepGoingInDirection:
-		
+
 		; FIXME tweak the speeds
 		LOAD	ZERO
 		STORE	DTheta
 		LOAD	FMid
 		STORE	DVel
 		CALL	ControlMovement
-	
+
 		; Check the bounds again!
 		JUMP	MoveLoop
 
@@ -465,7 +625,7 @@ MoveBack:
 	LOADI 	180
 	CALL 	Rotate
 	CALL 	GoHome
-	
+
 ;Goes to middle and searches for object to go towards
 Middle:			DW 2090
 GoToMiddleSearch:
@@ -527,7 +687,7 @@ AtMiddle:
 		STORE Angle
 		JUMP	Rotate
 		JUMP	CheckMidObj
-		
+
 c7FFF: DW &H7FFF
 m16sA: DW 0 ; multiplicand
 m16sB: DW 0 ; multipler
@@ -563,7 +723,7 @@ KillSonars:
 	LOAD	ZERO
 	OUT		SONAREN
 	RETURN
-	
+
 ; Stops robot movement
 StopMovement:
 	LOAD 	ZERO
@@ -733,8 +893,8 @@ Neg:
 	ADDI   1            ; Add one (i.e. negate number)
 Abs_r:
 	RETURN
-	
-	
+
+
 ; Mult16s:  16x16 -> 32-bit signed multiplication
 ; Based on Booth's algorithm.
 ; Written by Kevin Johnson.  No licence or copyright applied.
@@ -872,7 +1032,7 @@ GetBattLvl:
 ; using Taylor series -- will be accurate between -pi/2 and pi/2
 
 ; NEED MULT16S, lowbyte DW &HFF, DIV16S, neg
-; TODO removed cause errors :(	
+; TODO removed cause errors :(
 
 ;***************************************************************
 ;* Variables
@@ -897,12 +1057,12 @@ CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
 XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
 FilterVal:			DW 0		; Updated in the code to set up the max filter
 
-y_val:			DW 0 
-THETAtemp2:		DW 0 
+y_val:			DW 0
+THETAtemp2:		DW 0
 THETAtemp4:		DW 0
-THETA2:			DW 0 
+THETA2:			DW 0
 THETA4:			DW 0
-THETA6:			DW 0 
+THETA6:			DW 0
 TCOPY:			DW 0
 CosSum:			DW 0
 
@@ -1008,6 +1168,6 @@ LIN:      EQU &HC9
 ;* The x-array will inititialize at a location sufficiently far away from other instructions
 ;* Allows for dynamic length and known locations of words
 ;***************************************************************
-		 
 
-ORG     &H44C ; Start at location 1100 for the occupancy array
+
+ORG     		&H44C ; Start at location 1100 for the occupancy array
