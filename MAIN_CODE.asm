@@ -55,38 +55,57 @@ WaitForUser:
 ; If necessary, put any initialization
 ; data for main here
 Main:
-	OUT 	RESETPOS	; reset odometer in case wheels move after programming
-	; TODO
-
-; Main loop to search begins here
-MainLoop:
+	; TODO initialize array to maxDistance
+	
+	; Reset odometer in case wheels move after programming
+	OUT 	RESETPOS	
 	CALL	InitializeVars
 	CALL	InitialSearch
 
 	; TODO we need some way to keep track of the number of objects left
 	; while (numObjects > 0) { call FindAndTagClosestObject }
 	CALL	FindAndTagClosestObject
+	; Reset odometer in case wheels move after programming
+	OUT 	RESETPOS
+	
+	; We are done!
+	CALL Die
+
+; =================== ;
+; END OF CONTROL FLOW ;
+; =================== ;
 
 ;**************************************************
 ; Important Subroutines
 ;**************************************************
 
 InitializeVars:
-	; SW0 = AlongLongWall --> Sets var to 1 if the robot is travelling along the long wall
-	IN		SWITCHES
-	AND		MASK0
-	STORE 	AlongLongWall
-
-	; SW1 = ObjectsPosTheta --> Sets var to 1 if the robot must turn in the positive direction to tag objects
-	IN		SWITCHES
-	AND		MASK1
-	STORE	ObjectsPosTheta
-
-	; Reset odometer in case wheels move after initialization
-	OUT 	RESETPOS
-
-	; Return!
-	RETURN
+		; SW0 = AlongLongWall --> Sets var to 1 if the robot is travelling along the long wall
+		IN		SWITCHES
+		AND		MASK0
+		STORE 	AlongLongWall
+	
+		; ObjectsPosTheta: Sets var to 1 if the robot must turn in the positive direction to tag objects.
+		; Note: We turn positive if we are along the short edge
+		JZERO	PositiveThetaLoad
+		JPOS	ZeroThetaLoad
+		
+	PositiveThetaLoad:
+		LOAD	ONE
+		JUMP	ThetaStore
+		
+	ZeroThetaLoad:
+		LOAD	ZERO
+		JUMP ThetaStore
+		
+	ThetaStore:
+		STORE	ObjectsPosTheta
+	
+		; Reset odometer in case wheels move after initialization
+		OUT 	RESETPOS
+	
+		; Return!
+		RETURN
 
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
