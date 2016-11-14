@@ -183,9 +183,7 @@ InitialSearch:
 	; We are at the max bound of the wall now
 	DoneForward:
 		; Stop the wheels
-		LOAD	ZERO
-		OUT		LVELCMD
-		OUT		RVELCMD
+		CALL	StopMovement
 
 		; Rotate 180 (direction doesn't matter)
 		LOAD	Deg180
@@ -259,10 +257,6 @@ UpdateCell:
 
 ;Subroutine that filters the array created in update map
 FilterAndAggregate:
-		;TODO not every cell in the array will have a reading, we need to figure how to filter the readings to produce continuous object
-		;Account for two object being at the same distance away from wall
-		;Account for one object being behind another
-		
 		; Figure out what wall we are at
 		LOAD	AlongLongWall
 		JZERO	FilterLoadLong
@@ -289,7 +283,8 @@ FilterAndAggregate:
 		; Load the value in the current cell position in the array
 		ILOAD	XposIndex
 		
-		; Average it with the new data: (oldVal + newCell) / 2
+		; Aggregate it with the new data: (oldVal + newCell) / 2
+		; CHECKME can we find a better aggregation algorithm (with the given limitations and datastructure)?
 		ADD		Cell
 		SHIFT	-1
 		
@@ -305,7 +300,14 @@ FilterAndAggregate:
 FindClosestObject:
 	; TODO traverse through the array and get the xPos for the closest object
 	; TODO store in ObjectXDist, store distance in ObjectYDist
-	LOAD	TEN
+	
+	; Load the starting index of the array
+	ILOAD	CellArrI
+	
+	; TODO
+	
+	LOAD	ZERO
+	ADDI	500
 	STORE	ObjectXDist
 	STORE	ObjectYDist
 	RETURN
@@ -385,9 +387,7 @@ FindAndTagClosestObject:
 
 	AtObjectX:
 		; Stop the robot
-		LOAD	ZERO
-		OUT		LVELCMD
-		OUT		RVELCMD
+		CALL	StopMovement
 	
 		; TODO turn for Randy's tagging
 		; TODO call Randy's tag method
