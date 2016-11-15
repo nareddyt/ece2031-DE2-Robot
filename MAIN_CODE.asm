@@ -64,31 +64,6 @@ Main:
 	CALL	InitializeVars
 	CALL	InitializeMap
 	
-	;*****************************
-	; TEST CODE BEGIN (will delete later)
-	;*****************************
-	; Test Tagging Function
-	; Robot should travel a distance specified, then retrace steps and go back home
-	LOADI 	610 ; Assume a certain distance
-	STORE 	ObjectYDist ; This variable should have a particular value
-	LOADI 	90
-	STORE 	Angle
-	CALL 	Rotate
-	CALL 	Tag
-	; Test GoHome Function
-	; Tag should call GoHome
-	; Once at home, the robot should go back to Init
-	
-	; Test Alternative GoHome function
-	;LOADI 	610
-	;STORE 	ObjectYDist
-	;CALL  	Tag
-	
-	
-	;*****************************
-	; TEST CODE END
-	;*****************************
-	
 	; Start the initial search
 	CALL	InitialSearch
 
