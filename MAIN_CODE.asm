@@ -64,6 +64,21 @@ Main:
 	CALL	InitializeVars
 	CALL	InitializeMap
 	
+	; TEST CODE *********************
+	; Rotate 90 initially
+	LOADI 	90
+	STORE 	Angle
+	
+	; Tag
+	; Store initial value
+	LOADI 	1000
+	STORE   ObjectYDist
+	; Tag
+	CALL 	Rotate
+	CALL 	Tag
+	
+	; TEST CODE END ******************
+	
 	; Start the initial search
 	CALL	InitialSearch
 
@@ -106,12 +121,18 @@ InitializeVars:
 		
 		; Initialize global variables based on axis
 		JPOS 	LongWallInit
+		; Angle to travel when tagging object
 		LOADI	90
 		STORE 	TagAng
+		; Angle to travel when going back to wall
 		LOADI	270
 		STORE 	WallAng
-		LOADI	180
+		; Angle to travel when going home
+		LOADI	184
 		STORE 	HomeAng
+		; Mask8 will tell the robot which sensor to enable to maintain distance with wall
+		LOAD 	Mask0
+		STORE 	Mask8
 		RETURN
 		
 	LongWallInit:
@@ -121,12 +142,15 @@ InitializeVars:
 		STORE 	WallAng
 		LOADI	180
 		STORE 	HomeAng
+		LOAD 	Mask5
+		STORE 	Mask8
 		; Return!
 		RETURN
 		
 InitializeMap:
 	; TODO
 	DW 0
+	RETURN
 
 ; Initial search. Follow walls, updating the map based on objects that are perpendicular.
 InitialSearch:
@@ -411,7 +435,7 @@ TagIt:
 	CALL 	Abs
 	SUB 	EncoderY
 	SUB 	ObjectYDist
-	ADDI 	-10
+	ADDI 	-100
 	JNEG 	TagIt
 	; Prepare to move backwards a little
 	; Update EncoderY and Control Movement
@@ -628,6 +652,7 @@ GoToWall:
 	; Initialize sensors
 	LOAD 	MASK2
 	OR 		MASK3
+	OR 		MASK8
 	OUT 	SONAREN
 	; Initialize movement variables
 	LOAD  	WallAng
@@ -635,8 +660,11 @@ GoToWall:
 	LOAD 	FMid
 	STORE 	DVel
 CheckWall:
-	CALL ControlMovement
+	CALL 	ControlMovement
 	; Check if distance is lower than threshold
+	;CALL 	WallDist 	; Maintains distance with wall
+	LOAD	HomeAng
+	OUT 	SSEG2
 	IN 		DIST2
 	ADD 	WallThresh 	; 20 cm ~= 8 inches
 	JPOS 	CheckWall
@@ -650,14 +678,74 @@ GoToWall2:
 	; Initialize sensors
 	LOAD 	MASK2
 	OR 		MASK3
+	OR 		MASK8
 	OUT 	SONAREN
+CheckWall2:
 	; Initialize movement variables
 	LOAD  	HomeAng
 	STORE 	DTheta
 	LOAD 	FMid
 	STORE 	DVel
-	JUMP 	CheckWall
-
+	CALL 	ControlMovement
+	; Check if distance is lower than threshold
+	;CALL 	WallDist 	; Maintains distance with wall
+	IN 		DIST2
+	ADD 	WallThresh 	; 40 cm
+	JPOS 	CheckWall2
+	IN 		DIST3
+	ADD 	WallThresh 	; 40 cm
+	JPOS 	CheckWall2
+	CALL 	StopMovement 	; stops movement
+	CALL 	KillSonars
+	RETURN
+	
+; Function to maintain distance with the wall
+WallDist:
+	; Check which sensor you read from
+	LOAD 	MASK8
+	AND 	MASK0
+	; Jump if using sensor 5
+	JZERO 	WallRead1
+	; Jump if using sensor 0
+	JUMP 	WallRead2
+	; Check distance and compensate
+WallRead1:
+	IN 		DIST5
+	ADDI 	-250 ; Distance from wall
+	; If negative, shift toward wall
+	JNEG 	ToWall1
+	; If positive, shift away wall
+	JPOS 	AwayWall1
+ToWall1:
+	IN 		HomeAng
+	ADDI 	-1
+	STORE 	HomeAng
+	JUMP 	WallEnd
+AwayWall1:
+	IN 		HomeAng
+	ADDI 	1
+	STORE 	HomeAng
+	JUMP 	WallEnd
+WallRead2:
+	IN 		DIST0
+	ADDI 	-250
+	; If negative, shift toward wall
+	JNEG	ToWall2
+	; If positive, shift away wall
+	JPOS 	AwayWall2
+ToWall2:
+	IN 		HomeAng
+	ADDI 	-1
+	STORE 	HomeAng
+	JUMP 	WallEnd
+AwayWall2:
+	IN 		HomeAng
+	ADDI 	1
+	STORE 	HomeAng
+	JUMP 	WallEnd
+WallEnd:
+	RETURN
+	
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
 ; and match the speed specified in DVel
@@ -873,7 +961,7 @@ AlongLongWall:		DW 0		; Boolean that signifies if robot is aligned along the lon
 ObjectsPosTheta:	DW 0		; Boolean that signifies if the robot has to turn in a positive angle to tag objects
 TagVelocity:		DW 0		; Number that signifies the speed and direction the robot has to go in to get to the next closest object along the wall
 EncoderY: 			DW 0		; Stores current value of encoder in Y direction
-WallThresh: 		DW -200 	; Defines distance away from wall before DE2Bot should stop moving (used in GoHome function)
+WallThresh: 		DW -400 	; Defines distance away from wall before DE2Bot should stop moving (used in GoHome function)
 Cell: 				DW 0		; Initialize cell value
 CellCount:  		DW 0 		; How many values in the occupancy array
 CellArrI:   		DW &H44C	; Memory location (starting index) of the cell array
@@ -921,6 +1009,7 @@ Mask4:    DW &B00010000
 Mask5:    DW &B00100000
 Mask6:    DW &B01000000
 Mask7:    DW &B10000000
+Mask8:	  DW &B00000001 ; Mask that will be used in maintaining distance with wall (see GoToWall function)
 LowByte:  DW &HFF      ; binary 00000000 1111111
 LowNibl:  DW &HF       ; 0000 0000 0000 1111
 
@@ -932,8 +1021,8 @@ Deg90:    DW 90        ; 90 degrees in odometer units
 Deg180:   DW 180       ; 180
 Deg270:   DW 270       ; 270
 Deg360:   DW 360       ; can never actually happen; for math only
-FSlow:    DW 100       ; 100 is about the lowest velocity value that will move
-RSlow:    DW -100
+FSlow:    DW 140       ; 100 is about the lowest velocity value that will move
+RSlow:    DW -140
 FMid:     DW 350       ; 350 is a medium speed
 RMid:     DW -350
 FFast:    DW 500       ; 500 is almost max speed (511 is max)
