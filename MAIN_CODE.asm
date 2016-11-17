@@ -55,31 +55,24 @@ WaitForUser:
 ; If necessary, put any initialization
 ; data for main here
 Main:
-		; Reset odometer in case wheels move after programming
-		OUT 	RESETPOS
-	
-		; Initilize all the vars
-		CALL	InitializeVars
-		CALL	InitializeMap
-	
-		; Start the initial search
-		CALL	InitialSearch
-	
-		; Repeat this portion forever, waiting for user input each time we return home
-		LOAD	ZERO
-		JUMP	MainLoopForever
-		
-	MainLoopForever:	
-		CALL	FindAndTagClosestObject
-		
-		; We are back home! Wait for user input to go out again
-		CALL	WaitForUser
-		
-		; Reset odometer in case wheels move after programming
-		OUT 	RESETPOS
-		
-		; Loop again
-		JUMP	MainLoopForever
+	; TODO initialize array to maxDistance
+
+	; Reset odometer in case wheels move after programming
+	OUT 	RESETPOS
+
+	; Initilize all the vars
+	CALL	InitializeVars
+	CALL	InitializeMap
+
+	; Start the initial search
+	CALL	InitialSearch
+
+	; TODO we need some way to keep track of the number of objects left
+	; OR we could do it based on use input
+	; while (numObjects > 0) { call FindAndTagClosestObject }
+	CALL	FindAndTagClosestObject
+	; Reset odometer in case wheels move after programming
+	OUT 	RESETPOS
 
 ; Sometimes it's useful to permanently stop execution.
 ; This will also catch the execution if it accidentally
@@ -92,7 +85,7 @@ Die:
 		LOAD   DEAD         ; An indication that we are dead
 		OUT    SSEG2        ; "dEAd" on the LEDs
 
-	; Our version of HALT
+; Our version of HALT
 	Forever:
 		JUMP   Forever      ; Do this forever.
 		DEAD:  DW &HDEAD    ; Example of a "local" variable
@@ -298,9 +291,6 @@ InitialSearch:
 		ADD		MASK3
 		; TODO uncomment when we actually code for this and disable at the end
 		; OUT 	SONAREN
-		
-		LOAD	ONE
-		STORE	XDir
 
 	; Go forward until we are at the end of the edge
 	KeepGoingForward:
@@ -364,8 +354,8 @@ InitialSearch:
 UpdateMap:
  	LOAD 	AlongLongWall
  	XOR 	XDir
-	JPOS 	ELHS ; If 1
-	JZERO  	ERHS ; If 0
+	JPOS 	ELHS ; If 1, robot is set up for long axis traversal
+	JZERO  	ERHS ; If 0, robot setup values for short axis traverse
 
 	; Sonar sensor 5 is facing the objects, so turn it on and read it's value
 	ERHS:
@@ -449,61 +439,47 @@ FilterAndAggregate:
 		; Load the value in the current cell position in the array
 		ILOAD	XposIndex
 		
-		; Only update the map if the new data is smaller than the old data (object is closer than we think it is)
-		SUB		Cell
-		JPOS	StoreFilteredData
-		JZERO	FilterReturn
-		JPOS	FilterReturn
-		
-	StoreFilteredData:
-		; Aggregate the new data into the map: cell = oldVal - (newVal / 8)	
-		LOAD	Cell
-		SHIFT	-3
-		STORE	Cell
-		ILOAD	XposIndex
-		SUB		Cell
+		; Aggregate it with the new data: (oldVal + newCell) / 2
+		; CHECKME can we find a better aggregation algorithm (with the given limitations and datastructure)?
+		ADD		Cell
+		SHIFT	-1
 		
 		; Store it back in the corresponding index
 		ISTORE	XposIndex
 		
 	FilterReturn:
-		; DEBUG output of the XPOS
-		IN		XPOS
-		OUT		SSEG1
-		
-		; DEBUG output of the belief value in the cell
-		ILOAD	XposIndex
-		OUT		SSEG2
 		RETURN
 
 ; Finds the closest object (relative to the wall) based on the map
 ; Stores the x pos of the closest object in ObjectXDist
 ; Stores the y pos of the closest object in ObjectYDist
-FindClosestObject:		
+FindClosestObject:
+		; TODO traverse through the array and get the xPos for the closest object
+		; TODO store in ObjectXDist, store distance in ObjectYDist
+		
 		; Set the counter to 0
 		LOAD		ZERO
 		STORE		InitFillCounter
 		
-		; Initalize ObjectYDist to maxLong
+		; Store the max long distance in the ObjectYDist
 		LOAD		MaxLong
 		STORE		ObjectYDist
 		
-	;Loop to find the smallest value in the map
+	;Loop to fill array with the max dist value determined in previous steps
 	ClosestDistLoop:
 		LOAD		InitFillCounter
 		SUB			InitArraySize
 		JZERO		ClosestDone
 		JPOS		ClosestDone
 	
-		; Determine the address of the cell we are at
 		LOAD		CellArrI
 		ADD			InitFillCounter
 		STORE 		InitFillIndex
 		
-		; Increment the counter
 		LOAD		InitFillCounter
 		ADDI		1
 		STORE		InitFillCounter
+		JUMP		ClosestDistLoop
 		
 		; Check if it is the new closest
 		ILOAD		InitFillIndex
@@ -531,12 +507,9 @@ FindClosestObject:
 		LOAD		ObjectXDist
 		OUT			SSEG1
 		
-		; DEBUG output y distance of the closest object
+		; DEBUG output y distance
 		LOAD		ObjectYDist
 		OUT			SSEG2
-		
-		; DEBUG wait for user
-		CALL		WaitForUser
 		
 		; Return
 		RETURN
@@ -605,7 +578,7 @@ FindAndTagClosestObject:
 	KeepGoingInDirection:
 
 		; FIXME tweak the speeds
-		LOADI	180
+		LOAD	ZERO
 		STORE	DTheta
 		LOAD	FMid
 		STORE	DVel
@@ -617,33 +590,10 @@ FindAndTagClosestObject:
 	AtObjectX:
 		; Stop the robot
 		CALL	StopMovement
-		
-		; TODO rotate based on wall
-		LOAD	AlongLongWall
-		JZERO	RotatePosForTag
-		JPOS	RotateNegForTag
-		
-	RotatePosForTag:
-		LOADI	90
-		JUMP	RotateAndTagIt
 	
-	RotateNegForTag:
-		LOADI 	-90
-		JUMP	RotateAndTagIt
-	
-	RotateAndTagIt:	
-		; Rotate toward object
-		STORE 	Angle
-		CALL	ROTATE
-		
-		; Stop the robot from moving
-		CALL	StopMovement
-		
-		; Update the array
-		CALL	TagArrayUpdate
-	
-		; Call Randy's tag subroutine
-		CALL 	Tag
+		; TODO turn for Randy's tagging
+		; TODO call Randy's tag method
+		; TODO return to home
 
 		; Return to main
 		RETURN
@@ -1034,6 +984,71 @@ Mult16s:
 		STORE  mres16sL     ; multiplier and result L shared a word
 		RETURN              ; Done
 
+;*******************************************************************************
+; Div16s:  16/16 -> 16 R16 signed division
+; Written by Kevin Johnson.  No licence or copyright applied.
+; Warning: results undefined if denominator = 0.
+; To use:
+; - Store numerator in d16sN and denominator in d16sD.
+; - Call Div16s
+; - Result is stored in dres16sQ and dres16sR (quotient and remainder).
+; Requires Abs subroutine
+;*******************************************************************************
+Div16s:
+	LOADI  0
+	STORE  dres16sR     ; clear remainder result
+	STORE  d16sC1       ; clear carry
+	LOAD   d16sN
+	XOR    d16sD
+	STORE  d16sS        ; sign determination = N XOR D
+	LOADI  17
+	STORE  d16sT        ; preload counter with 17 (16+1)
+	LOAD   d16sD
+	CALL   Abs          ; take absolute value of denominator
+	STORE  d16sD
+	LOAD   d16sN
+	CALL   Abs          ; take absolute value of numerator
+	STORE  d16sN
+Div16s_loop:
+	LOAD   d16sN
+	SHIFT  -15          ; get msb
+	AND    One          ; only msb (because shift is arithmetic)
+	STORE  d16sC2       ; store as carry
+	LOAD   d16sN
+	SHIFT  1            ; shift <<1
+	OR     d16sC1       ; with carry
+	STORE  d16sN
+	LOAD   d16sT
+	ADDI   -1           ; decrement counter
+	JZERO  Div16s_sign  ; if finished looping, finalize result
+	STORE  d16sT
+	LOAD   dres16sR
+	SHIFT  1            ; shift remainder
+	OR     d16sC2       ; with carry from other shift
+	SUB    d16sD        ; subtract denominator from remainder
+	JNEG   Div16s_add   ; if negative, need to add it back
+	STORE  dres16sR
+	LOADI  1
+	STORE  d16sC1       ; set carry
+	JUMP   Div16s_loop
+Div16s_add:
+	ADD    d16sD        ; add denominator back in
+	STORE  dres16sR
+	LOADI  0
+	STORE  d16sC1       ; clear carry
+	JUMP   Div16s_loop
+Div16s_sign:
+	LOAD   d16sN
+	STORE  dres16sQ     ; numerator was used to hold quotient result
+	LOAD   d16sS        ; check the sign indicator
+	JNEG   Div16s_neg
+	RETURN
+Div16s_neg:
+	LOAD   dres16sQ     ; need to negate the result
+	CALL   Neg
+	STORE  dres16sQ
+	RETURN	
+
 ; Subroutine to wait (block) for 1 second
 Wait1:
 	OUT    TIMER
@@ -1124,7 +1139,140 @@ GetBattLvl:
 ; using Taylor series -- will be accurate between -pi/2 and pi/2
 
 ; NEED MULT16S, lowbyte DW &HFF, DIV16S, neg
-; TODO removed cause errors :(
+; input THETA as degree
+; output x_val as sine of THETA
+; using Taylor series -- will be accurate between -pi/2 and pi/2
+
+; NEED MULT16S, lowbyte DW &HFF, DIV16S, neg
+COSINE:
+		LOAD	THETA
+		STORE 	TCOPY
+		LOAD 	THETA
+		ADDI 	-180
+		JNEG 	NEGSINE			; if THETA is in third or fourth quadrant, sine value will be output as negative
+		ADDI	180
+		ADDI 	-90
+		JPOS	QUAD2
+		ADDI	90
+THETAQUAD2:
+THETANEGSINE:
+		LOAD 	THETA
+		STORE 	m16sA
+		STORE 	m16sB
+		CALL	Mult16s
+		LOAD    mres16sH
+		SHIFT   8            ; move high word of result up 8 bits
+		STORE   mres16sH
+		LOAD    mres16sL
+		SHIFT   -8           ; move low word of result down 8 bits
+		AND     LowByte
+		OR      mres16sH     ; combine high and low words of result
+		STORE	THETAtemp2	 ; equivalent to THETA ^ 2
+		STORE	THETA2
+		SHIFT	-1			 ; divide by 2
+		CALL 	Neg
+		STORE	THETA2
+		
+		LOAD 	THETAtemp
+		STORE 	m16sA
+		STORE 	m16sB	
+		CALL	Mult16s
+		LOAD    mres16sH
+		SHIFT   8            ; move high word of result up 8 bits
+		STORE   mres16sH
+		LOAD    mres16sL
+		SHIFT   -8           ; move low word of result down 8 bits
+		AND     LowByte
+		OR      mres16sH     ; combine high and low words of resultv
+		STORE 	THETAtemp4	 ; equivalent to THETA ^ 4
+		STORE 	THETA4
+		
+		LOADI 	2
+		SHIFT	5			 ; immediate of 2 ^ 5 = 32
+		ADDI 	-8			 ; 32 - 8 = 24
+		STORE 	d16sD
+		LOAD 	THETA4
+		STORE 	d16sN
+		CALL	Div16s
+		LOAD	dres16sQ
+		STORE 	THETA4
+		
+		LOAD 	THETAtemp4	 ; performing THETA^6
+		STORE 	m16sA
+		LOAD	THETAtemp2
+		STORE 	m16sB
+		CALL	Mult16s
+		LOAD    mres16sH
+		SHIFT   8            ; move high word of result up 8 bits
+		STORE   mres16sH
+		LOAD    mres16sL
+		SHIFT   -8           ; move low word of result down 8 bits
+		AND     LowByte
+		OR      mres16sH     ; combine high and low words of result
+		STORE	THETA6		 ; equivalent to THETA ^ 6
+		
+		LOADI	2
+		SHIFT	10			 ; immediate of 1024
+		ADDI	-304		 ; 1024 - 304 = 720
+		LOAD 	d16sD
+		LOAD 	THETA6
+		STORE 	d16sN
+		CALL	Div16s
+		LOAD	dres16sQ
+		CALL	Neg
+		STORE 	THETA6
+		
+		LOADI	1
+		ADD		THETA2
+		ADD 	THETA4
+		ADD		THETA6
+		STORE	x_val
+		
+		LOAD 	TCOPY
+		ADDI	-180
+		JPOS	NEGYVAL
+		
+		STORE	x_val
+		RETURN	
+		
+NEGYVAL:	
+		LOAD 	x_val
+		CALL	Neg			; negate x_val if in quadrants III o IV
+		STORE 	x_val
+		RETURN
+		
+QUAD2:	
+		LOAD 	THETA
+		ADDI	-90
+		JUMP	THETAQUAD2		
+		
+NEGSINE:
+		LOADI	360
+		SUB		THETA
+		JUMP	THETANEGSINE
+
+
+; SINE function
+; input: distance from the object (DISTX) <based on the sonar being used, THETA
+	; sin(theta) = O/H = x_val/DISTX
+; output: y_val
+; NEEDED: COSINE
+
+SINE:
+		LOAD	THETA
+		ADDI	-90		; finding other angle
+		STORE 	THETA
+ 		CALL 	COSINE
+		LOAD 	x_val	; OUTPUT OF COSINE
+		STORE 	y_val	; by finding the cosine of the other angle, the sine of the original triangle can be found
+	
+		STORE 	d16sN
+		LOAD  	DISTX
+		STORE 	d16sN
+		CALL	Div16s
+		LOAD	dres16sQ
+		STORE 	y_val
+		RETURN
 
 ;***************************************************************
 ;* Variables
@@ -1150,6 +1298,7 @@ XposIndex:			DW 0		; Initialize a temporary index for cell array indexing
 FilterVal:			DW 0		; Updated in the code to set up the max filter
 
 y_val:			DW 0
+DISTX:			DW 0
 THETAtemp2:		DW 0
 THETAtemp4:		DW 0
 THETA2:			DW 0
@@ -1157,6 +1306,15 @@ THETA4:			DW 0
 THETA6:			DW 0
 TCOPY:			DW 0
 CosSum:			DW 0
+; For div16s
+d16sN: DW 0 ; numerator
+d16sD: DW 0 ; denominator
+d16sS: DW 0 ; sign value
+d16sT: DW 0 ; temp counter
+d16sC1: DW 0 ; carry value
+d16sC2: DW 0 ; carry value
+dres16sQ: DW 0 ; quotient result
+dres16sR: DW 0 ; remainder result
 
 
 ;***************************************************************
