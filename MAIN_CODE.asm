@@ -55,24 +55,31 @@ WaitForUser:
 ; If necessary, put any initialization
 ; data for main here
 Main:
-	; TODO initialize array to maxDistance
-
-	; Reset odometer in case wheels move after programming
-	OUT 	RESETPOS
-
-	; Initilize all the vars
-	CALL	InitializeVars
-	CALL	InitializeMap
-
-	; Start the initial search
-	CALL	InitialSearch
-
-	; TODO we need some way to keep track of the number of objects left
-	; OR we could do it based on use input
-	; while (numObjects > 0) { call FindAndTagClosestObject }
-	CALL	FindAndTagClosestObject
-	; Reset odometer in case wheels move after programming
-	OUT 	RESETPOS
+		; Reset odometer in case wheels move after programming
+		OUT 	RESETPOS
+	
+		; Initilize all the vars
+		CALL	InitializeVars
+		CALL	InitializeMap
+	
+		; Start the initial search
+		CALL	InitialSearch
+	
+		; Repeat this portion forever, waiting for user input each time we return home
+		LOAD	ZERO
+		JUMP	MainLoopForever
+		
+	MainLoopForever:	
+		CALL	FindAndTagClosestObject
+		
+		; We are back home! Wait for user input to go out again
+		CALL	WaitForUser
+		
+		; Reset odometer in case wheels move after programming
+		OUT 	RESETPOS
+		
+		; Loop again
+		JUMP	MainLoopForever
 
 ; Sometimes it's useful to permanently stop execution.
 ; This will also catch the execution if it accidentally
@@ -611,15 +618,32 @@ FindAndTagClosestObject:
 		; Stop the robot
 		CALL	StopMovement
 		
+		; TODO rotate based on wall
+		LOAD	AlongLongWall
+		JZERO	RotatePosForTag
+		JPOS	RotateNegForTag
+		
+	RotatePosForTag:
+		LOADI	90
+		JUMP	RotateAndTagIt
+	
+	RotateNegForTag:
 		LOADI 	-90
+		JUMP	RotateAndTagIt
+	
+	RotateAndTagIt:	
+		; Rotate toward object
 		STORE 	Angle
 		CALL	ROTATE
 		
+		; Stop the robot from moving
 		CALL	StopMovement
+		
+		; Update the array
+		CALL	TagArrayUpdate
 	
-		; TODO turn for Randy's tagging
-		; TODO call Randy's tag method
-		; TODO return to home
+		; Call Randy's tag subroutine
+		CALL 	Tag
 
 		; Return to main
 		RETURN
