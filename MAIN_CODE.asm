@@ -442,15 +442,31 @@ FilterAndAggregate:
 		; Load the value in the current cell position in the array
 		ILOAD	XposIndex
 		
-		; Aggregate it with the new data: (oldVal + newCell) / 2
-		; CHECKME can we find a better aggregation algorithm (with the given limitations and datastructure)?
-		ADD		Cell
-		SHIFT	-1
+		; Only update the map if the new data is smaller than the old data (object is closer than we think it is)
+		SUB		Cell
+		JPOS	StoreFilteredData
+		JZERO	FilterReturn
+		JPOS	FilterReturn
+		
+	StoreFilteredData:
+		; Aggregate the new data into the map: cell = oldVal - (newVal / 8)	
+		LOAD	Cell
+		SHIFT	-3
+		STORE	Cell
+		ILOAD	XposIndex
+		SUB		Cell
 		
 		; Store it back in the corresponding index
 		ISTORE	XposIndex
 		
 	FilterReturn:
+		; DEBUG output of the XPOS
+		IN		XPOS
+		OUT		SSEG1
+		
+		; DEBUG output of the belief value in the cell
+		ILOAD	XposIndex
+		OUT		SSEG2
 		RETURN
 
 ; Finds the closest object (relative to the wall) based on the map
