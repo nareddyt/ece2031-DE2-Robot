@@ -64,21 +64,6 @@ Main:
 	CALL	InitializeVars
 	CALL	InitializeMap
 	
-	; TEST CODE *********************
-	; Rotate 90 initially
-	LOADI 	90
-	STORE 	Angle
-	
-	; Tag
-	; Store initial value
-	LOADI 	1000
-	STORE   ObjectYDist
-	; Tag
-	CALL 	Rotate
-	CALL 	Tag
-	
-	; TEST CODE END ******************
-	
 	; Start the initial search
 	CALL	InitialSearch
 
@@ -662,7 +647,6 @@ GoToWall:
 CheckWall:
 	CALL 	ControlMovement
 	; Check if distance is lower than threshold
-	;CALL 	WallDist 	; Maintains distance with wall
 	LOAD	HomeAng
 	OUT 	SSEG2
 	IN 		DIST2
@@ -688,7 +672,6 @@ CheckWall2:
 	STORE 	DVel
 	CALL 	ControlMovement
 	; Check if distance is lower than threshold
-	;CALL 	WallDist 	; Maintains distance with wall
 	IN 		DIST2
 	ADD 	WallThresh 	; 40 cm
 	JPOS 	CheckWall2
@@ -698,54 +681,7 @@ CheckWall2:
 	CALL 	StopMovement 	; stops movement
 	CALL 	KillSonars
 	RETURN
-	
-; Function to maintain distance with the wall
-WallDist:
-	; Check which sensor you read from
-	LOAD 	MASK8
-	AND 	MASK0
-	; Jump if using sensor 5
-	JZERO 	WallRead1
-	; Jump if using sensor 0
-	JUMP 	WallRead2
-	; Check distance and compensate
-WallRead1:
-	IN 		DIST5
-	ADDI 	-250 ; Distance from wall
-	; If negative, shift toward wall
-	JNEG 	ToWall1
-	; If positive, shift away wall
-	JPOS 	AwayWall1
-ToWall1:
-	IN 		HomeAng
-	ADDI 	-1
-	STORE 	HomeAng
-	JUMP 	WallEnd
-AwayWall1:
-	IN 		HomeAng
-	ADDI 	1
-	STORE 	HomeAng
-	JUMP 	WallEnd
-WallRead2:
-	IN 		DIST0
-	ADDI 	-250
-	; If negative, shift toward wall
-	JNEG	ToWall2
-	; If positive, shift away wall
-	JPOS 	AwayWall2
-ToWall2:
-	IN 		HomeAng
-	ADDI 	-1
-	STORE 	HomeAng
-	JUMP 	WallEnd
-AwayWall2:
-	IN 		HomeAng
-	ADDI 	1
-	STORE 	HomeAng
-	JUMP 	WallEnd
-WallEnd:
-	RETURN
-	
+		
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
 ; and match the speed specified in DVel
