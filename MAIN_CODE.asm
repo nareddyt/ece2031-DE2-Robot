@@ -472,33 +472,31 @@ FilterAndAggregate:
 ; Finds the closest object (relative to the wall) based on the map
 ; Stores the x pos of the closest object in ObjectXDist
 ; Stores the y pos of the closest object in ObjectYDist
-FindClosestObject:
-		; TODO traverse through the array and get the xPos for the closest object
-		; TODO store in ObjectXDist, store distance in ObjectYDist
-		
+FindClosestObject:		
 		; Set the counter to 0
 		LOAD		ZERO
 		STORE		InitFillCounter
 		
-		; Store the max long distance in the ObjectYDist
+		; Initalize ObjectYDist to maxLong
 		LOAD		MaxLong
 		STORE		ObjectYDist
 		
-	;Loop to fill array with the max dist value determined in previous steps
+	;Loop to find the smallest value in the map
 	ClosestDistLoop:
 		LOAD		InitFillCounter
 		SUB			InitArraySize
 		JZERO		ClosestDone
 		JPOS		ClosestDone
 	
+		; Determine the address of the cell we are at
 		LOAD		CellArrI
 		ADD			InitFillCounter
 		STORE 		InitFillIndex
 		
+		; Increment the counter
 		LOAD		InitFillCounter
 		ADDI		1
 		STORE		InitFillCounter
-		JUMP		ClosestDistLoop
 		
 		; Check if it is the new closest
 		ILOAD		InitFillIndex
@@ -522,12 +520,6 @@ FindClosestObject:
 		JUMP		ClosestDistLoop
 
 	ClosestDone:
-		LOADI		800
-		STORE		ObjectXDist
-		
-		LOADI		500
-		STORE		ObjectYDist
-	
 		; DEBUG output closest x position
 		LOAD		ObjectXDist
 		OUT			SSEG1
@@ -535,6 +527,9 @@ FindClosestObject:
 		; DEBUG output y distance of the closest object
 		LOAD		ObjectYDist
 		OUT			SSEG2
+		
+		; DEBUG wait for user
+		CALL		WaitForUser
 		
 		; Return
 		RETURN
