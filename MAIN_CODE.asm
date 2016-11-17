@@ -291,6 +291,9 @@ InitialSearch:
 		ADD		MASK3
 		; TODO uncomment when we actually code for this and disable at the end
 		; OUT 	SONAREN
+		
+		LOAD	ONE
+		STORE	XDir
 
 	; Go forward until we are at the end of the edge
 	KeepGoingForward:
@@ -354,8 +357,8 @@ InitialSearch:
 UpdateMap:
  	LOAD 	AlongLongWall
  	XOR 	XDir
-	JPOS 	ELHS ; If 1, robot is set up for long axis traversal
-	JZERO  	ERHS ; If 0, robot setup values for short axis traverse
+	JPOS 	ELHS ; If 1
+	JZERO  	ERHS ; If 0
 
 	; Sonar sensor 5 is facing the objects, so turn it on and read it's value
 	ERHS:
@@ -503,11 +506,17 @@ FindClosestObject:
 		JUMP		ClosestDistLoop
 
 	ClosestDone:
+		LOADI		800
+		STORE		ObjectXDist
+		
+		LOADI		500
+		STORE		ObjectYDist
+	
 		; DEBUG output closest x position
 		LOAD		ObjectXDist
 		OUT			SSEG1
 		
-		; DEBUG output y distance
+		; DEBUG output y distance of the closest object
 		LOAD		ObjectYDist
 		OUT			SSEG2
 		
@@ -578,7 +587,7 @@ FindAndTagClosestObject:
 	KeepGoingInDirection:
 
 		; FIXME tweak the speeds
-		LOAD	ZERO
+		LOADI	180
 		STORE	DTheta
 		LOAD	FMid
 		STORE	DVel
@@ -589,6 +598,12 @@ FindAndTagClosestObject:
 
 	AtObjectX:
 		; Stop the robot
+		CALL	StopMovement
+		
+		LOADI 	-90
+		STORE 	Angle
+		CALL	ROTATE
+		
 		CALL	StopMovement
 	
 		; TODO turn for Randy's tagging
