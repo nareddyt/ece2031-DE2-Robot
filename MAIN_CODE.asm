@@ -55,24 +55,31 @@ WaitForUser:
 ; If necessary, put any initialization
 ; data for main here
 Main:
-	; TODO initialize array to maxDistance
-
-	; Reset odometer in case wheels move after programming
-	OUT 	RESETPOS
-
-	; Initilize all the vars
-	CALL	InitializeVars
-	CALL	InitializeMap
-
-	; Start the initial search
-	CALL	InitialSearch
-
-	; TODO we need some way to keep track of the number of objects left
-	; OR we could do it based on use input
-	; while (numObjects > 0) { call FindAndTagClosestObject }
-	CALL	FindAndTagClosestObject
-	; Reset odometer in case wheels move after programming
-	OUT 	RESETPOS
+		; Reset odometer in case wheels move after programming
+		OUT 	RESETPOS
+	
+		; Initilize all the vars
+		CALL	InitializeVars
+		CALL	InitializeMap
+	
+		; Start the initial search
+		CALL	InitialSearch
+	
+		; Repeat this portion forever, waiting for user input each time we return home
+		LOAD	ZERO
+		JUMP	MainLoopForever
+		
+	MainLoopForever:	
+		CALL	FindAndTagClosestObject
+		
+		; We are back home! Wait for user input to go out again
+		CALL	WaitForUser
+		
+		; Reset odometer in case wheels move after programming
+		OUT 	RESETPOS
+		
+		; Loop again
+		JUMP	MainLoopForever
 
 ; Sometimes it's useful to permanently stop execution.
 ; This will also catch the execution if it accidentally
@@ -442,47 +449,61 @@ FilterAndAggregate:
 		; Load the value in the current cell position in the array
 		ILOAD	XposIndex
 		
-		; Aggregate it with the new data: (oldVal + newCell) / 2
-		; CHECKME can we find a better aggregation algorithm (with the given limitations and datastructure)?
-		ADD		Cell
-		SHIFT	-1
+		; Only update the map if the new data is smaller than the old data (object is closer than we think it is)
+		SUB		Cell
+		JPOS	StoreFilteredData
+		JZERO	FilterReturn
+		JPOS	FilterReturn
+		
+	StoreFilteredData:
+		; Aggregate the new data into the map: cell = oldVal - (newVal / 8)	
+		LOAD	Cell
+		SHIFT	-3
+		STORE	Cell
+		ILOAD	XposIndex
+		SUB		Cell
 		
 		; Store it back in the corresponding index
 		ISTORE	XposIndex
 		
 	FilterReturn:
+		; DEBUG output of the XPOS
+		IN		XPOS
+		OUT		SSEG1
+		
+		; DEBUG output of the belief value in the cell
+		ILOAD	XposIndex
+		OUT		SSEG2
 		RETURN
 
 ; Finds the closest object (relative to the wall) based on the map
 ; Stores the x pos of the closest object in ObjectXDist
 ; Stores the y pos of the closest object in ObjectYDist
-FindClosestObject:
-		; TODO traverse through the array and get the xPos for the closest object
-		; TODO store in ObjectXDist, store distance in ObjectYDist
-		
+FindClosestObject:		
 		; Set the counter to 0
 		LOAD		ZERO
 		STORE		InitFillCounter
 		
-		; Store the max long distance in the ObjectYDist
+		; Initalize ObjectYDist to maxLong
 		LOAD		MaxLong
 		STORE		ObjectYDist
 		
-	;Loop to fill array with the max dist value determined in previous steps
+	;Loop to find the smallest value in the map
 	ClosestDistLoop:
 		LOAD		InitFillCounter
 		SUB			InitArraySize
 		JZERO		ClosestDone
 		JPOS		ClosestDone
 	
+		; Determine the address of the cell we are at
 		LOAD		CellArrI
 		ADD			InitFillCounter
 		STORE 		InitFillIndex
 		
+		; Increment the counter
 		LOAD		InitFillCounter
 		ADDI		1
 		STORE		InitFillCounter
-		JUMP		ClosestDistLoop
 		
 		; Check if it is the new closest
 		ILOAD		InitFillIndex
@@ -506,12 +527,6 @@ FindClosestObject:
 		JUMP		ClosestDistLoop
 
 	ClosestDone:
-		LOADI		800
-		STORE		ObjectXDist
-		
-		LOADI		500
-		STORE		ObjectYDist
-	
 		; DEBUG output closest x position
 		LOAD		ObjectXDist
 		OUT			SSEG1
@@ -519,6 +534,9 @@ FindClosestObject:
 		; DEBUG output y distance of the closest object
 		LOAD		ObjectYDist
 		OUT			SSEG2
+		
+		; DEBUG wait for user
+		CALL		WaitForUser
 		
 		; Return
 		RETURN
@@ -600,15 +618,32 @@ FindAndTagClosestObject:
 		; Stop the robot
 		CALL	StopMovement
 		
+		; TODO rotate based on wall
+		LOAD	AlongLongWall
+		JZERO	RotatePosForTag
+		JPOS	RotateNegForTag
+		
+	RotatePosForTag:
+		LOADI	90
+		JUMP	RotateAndTagIt
+	
+	RotateNegForTag:
 		LOADI 	-90
+		JUMP	RotateAndTagIt
+	
+	RotateAndTagIt:	
+		; Rotate toward object
 		STORE 	Angle
 		CALL	ROTATE
 		
+		; Stop the robot from moving
 		CALL	StopMovement
+		
+		; Update the array
+		CALL	TagArrayUpdate
 	
-		; TODO turn for Randy's tagging
-		; TODO call Randy's tag method
-		; TODO return to home
+		; Call Randy's tag subroutine
+		CALL 	Tag
 
 		; Return to main
 		RETURN
