@@ -101,6 +101,45 @@ Die:
 ; END OF CONTROL FLOW ;
 ; ------------------- ;
 
+TravelDist:		DW 0
+;Tejus new way code;
+NewMain:
+		OUT		RESETPOS
+		LOAD	MASK5
+		OUT		SONAREN
+
+		NewKeepCheck:		
+		IN		DIST5
+		STORE	TravelDist
+		SUB		MaxShort
+		JNEG	NewFound
+		
+		IN		XPOS
+		SUB		MaxLong
+		JZERO	TurnAroundGoHome
+		JNEG	TurnAroundGoHome
+		
+		LOAD 	FSlow
+		OUT  	LVELCMD     ; send velocity to left and right wheels
+		OUT   	RVELCMD
+		JUMP	NewKeepCheck
+		
+TurnAroundGoHome:
+		LOAD	ZERO
+		ADDI	-180
+		STORE	Angle
+		CALL	Rotate
+		
+		GoingHome:
+		LOAD 	FSlow
+		OUT  	LVELCMD
+		OUT   	RVELCMD
+		JUMP	GoingHome
+			
+NewFound:
+		CALL	Die
+		
+
 ;**************************************************
 ; Important Subroutines
 ;**************************************************
