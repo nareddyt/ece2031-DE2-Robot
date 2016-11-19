@@ -132,7 +132,8 @@ FindAndTagClosestObject:
 		ADDI 	-310
 		JPOS 	NewKeepCheck
 		
-		; We detected an object in the robot's movement path!
+		; We detected an object in the robot's movement path! 
+		; However, we don't know if the robot is actually gonna run into it cause sensor 3 is angled. TODO
 		; Move 310 mm forward and tag
 		; Update EncoderX (initial value)
 		IN   	XPOS
