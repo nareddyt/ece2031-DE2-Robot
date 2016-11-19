@@ -97,23 +97,6 @@ Die:
 ; Important Subroutines
 ;**************************************************
 
-WaitForUserSub:
-	; This loop will wait for the user to press PB3, to ensure that
-	; they have a chance to prepare for any movement in the main code.
-	IN     TIMER       ; We'll blink the LEDs above PB3
-	AND    Mask1
-	SHIFT  5           ; Both LEDG6 and LEDG7
-	STORE  Temp        ; (overkill, but looks nice)
-	SHIFT  1
-	OR     Temp
-	OUT    XLEDS
-	IN     XIO         ; XIO contains KEYs
-	AND    Mask2       ; KEY3 mask (KEY0 is reset and can't be read)
-	JPOS   WaitForUserSub ; not ready (KEYs are active-low, hence JPOS)
-	LOAD   Zero
-	OUT    XLEDS       ; clear LEDs once ready to continue
-	RETURN
-
 	TravelDist:		DW 0
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
@@ -121,6 +104,8 @@ WaitForUserSub:
 FindAndTagClosestObject:
 		OUT		RESETPOS
 		LOAD	MASK5
+		OR		MASK2
+		OR		MASK3
 		OUT		SONAREN
 
 	NewKeepCheck:		
@@ -141,7 +126,55 @@ FindAndTagClosestObject:
 		STORE 	DVel
 		; Move robot
 		CALL 	ControlMovement
-		JUMP	NewKeepCheck
+		
+		; Check if we are about to run into anything
+		IN 		DIST3
+		ADDI 	-310
+		JPOS 	NewKeepCheck
+		
+		; We detected an object in the robot's movement path!
+		; Move 310 mm forward and tag
+		; Update EncoderX (initial value)
+		IN   	XPOS
+		ADDI 	325
+		STORE 	EncoderX
+		
+	HitDetectedAlongPath:
+		; Travel a bit more
+		; Move robot
+		LOADI 	0
+		STORE 	DTheta
+		LOAD 	FFast
+		STORE 	DVel
+		CALL 	ControlMovement
+		
+		; Check distance traveled
+		IN 		XPOS
+		SUB 	EncoderX
+		JNEG 	HitDetectedAlongPath
+	
+		; We just hit the object!
+		; Prepare to move backwards a little
+		; Update EncoderY and Control Movement
+		IN 		XPOS
+		ADDI 	-30
+		STORE 	EncoderX
+		LOADI 	0
+		STORE 	DTheta
+		LOAD 	FFast
+		STORE 	DVel
+	MoveBackABit:
+		; Move backwards a little
+		CALL 	ControlMovement
+		
+		; Check distance
+		IN 		XPOS
+		SUB 	EncoderX
+		JPOS 	MoveBackABit
+		
+		; Now stop, turn around, and go back home
+		CALL	StopMovement
+		JUMP	TurnAroundGoHome
 		
 	TurnAroundGoHome:
 		CALL	StopMovement
@@ -446,54 +479,6 @@ Neg:
 Abs_r:
 	RETURN
 
-
-; Mult16s:  16x16 -> 32-bit signed multiplication
-; Based on Booth's algorithm.
-; Written by Kevin Johnson.  No licence or copyright applied.
-; Warning: does not work with factor B = -32768 (most-negative number).
-; To use:
-; - Store factors in m16sA and m16sB.
-; - Call Mult16s
-; - Result is stored in mres16sH and mres16sL (high and low words).
-Mult16s:
-		LOADI  0
-		STORE  m16sc        ; clear carry
-		STORE  mres16sH     ; clear result
-		LOADI  16           ; load 16 to counter
-	Mult16s_loop:
-		STORE  mcnt16s
-		LOAD   m16sc        ; check the carry (from previous iteration)
-		JZERO  Mult16s_noc  ; if no carry, move on
-		LOAD   mres16sH     ; if a carry,
-		ADD    m16sA        ;  add multiplicand to result H
-		STORE  mres16sH
-	Mult16s_noc: ; no carry
-		LOAD   m16sB
-		AND    One          ; check bit 0 of multiplier
-		STORE  m16sc        ; save as next carry
-		JZERO  Mult16s_sh   ; if no carry, move on to shift
-		LOAD   mres16sH     ; if bit 0 set,
-		SUB    m16sA        ;  subtract multiplicand from result H
-		STORE  mres16sH
-	Mult16s_sh:
-		LOAD   m16sB
-		SHIFT  -1           ; shift result L >>1
-		AND    c7FFF        ; clear msb
-		STORE  m16sB
-		LOAD   mres16sH     ; load result H
-		SHIFT  15           ; move lsb to msb
-		OR     m16sB
-		STORE  m16sB        ; result L now includes carry out from H
-		LOAD   mres16sH
-		SHIFT  -1
-		STORE  mres16sH     ; shift result H >>1
-		LOAD   mcnt16s
-		ADDI   -1           ; check counter
-		JPOS   Mult16s_loop ; need to iterate 16 times
-		LOAD   m16sB
-		STORE  mres16sL     ; multiplier and result L shared a word
-		RETURN              ; Done
-
 ; Subroutine to wait (block) for 1 second
 Wait1:
 	OUT    TIMER
@@ -596,6 +581,7 @@ LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
 ErrMargin: 			DW 4
 EncoderY: 			DW 0		; Stores current value of encoder in Y direction
+EncoderX:			DW 0		; Stores current value of encoder in X direction
 TagAng: 			DW -90		; Tells robot travel ang when tagging
 
 y_val:			DW 0
