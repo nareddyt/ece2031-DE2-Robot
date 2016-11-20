@@ -57,7 +57,6 @@ WaitForUser:
 Main:
 		; Reset odometer in case wheels move after programming
 		OUT 	RESETPOS
-	
 		; Repeat this portion forever, waiting for user input each time we return home
 		LOAD	ZERO
 		JUMP	MainLoopForever
@@ -97,6 +96,23 @@ Die:
 ; Important Subroutines
 ;**************************************************
 
+WaitForUserSub:
+	; This loop will wait for the user to press PB3, to ensure that
+	; they have a chance to prepare for any movement in the main code.
+	IN     TIMER       ; We'll blink the LEDs above PB3
+	AND    Mask1
+	SHIFT  5           ; Both LEDG6 and LEDG7
+	STORE  Temp        ; (overkill, but looks nice)
+	SHIFT  1
+	OR     Temp
+	OUT    XLEDS
+	IN     XIO         ; XIO contains KEYs
+	AND    Mask2       ; KEY3 mask (KEY0 is reset and can't be read)
+	JPOS   WaitForUserSub ; not ready (KEYs are active-low, hence JPOS)
+	LOAD   Zero
+	OUT    XLEDS       ; clear LEDs once ready to continue
+	RETURN
+
 	TravelDist:		DW 0
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
@@ -104,8 +120,6 @@ Die:
 FindAndTagClosestObject:
 		OUT		RESETPOS
 		LOAD	MASK5
-		OR		MASK2
-		OR		MASK3
 		OUT		SONAREN
 
 	NewKeepCheck:		
@@ -126,55 +140,7 @@ FindAndTagClosestObject:
 		STORE 	DVel
 		; Move robot
 		CALL 	ControlMovement
-		
-		; Check if we are about to run into anything
-		IN 		DIST3
-		ADDI 	-310
-		JPOS 	NewKeepCheck
-		
-		; We detected an object in the robot's movement path!
-		; Move 310 mm forward and tag
-		; Update EncoderX (initial value)
-		IN   	XPOS
-		ADDI 	325
-		STORE 	EncoderX
-		
-	HitDetectedAlongPath:
-		; Travel a bit more
-		; Move robot
-		LOADI 	0
-		STORE 	DTheta
-		LOAD 	FFast
-		STORE 	DVel
-		CALL 	ControlMovement
-		
-		; Check distance traveled
-		IN 		XPOS
-		SUB 	EncoderX
-		JNEG 	HitDetectedAlongPath
-	
-		; We just hit the object!
-		; Prepare to move backwards a little
-		; Update EncoderY and Control Movement
-		IN 		XPOS
-		ADDI 	-30
-		STORE 	EncoderX
-		LOADI 	0
-		STORE 	DTheta
-		LOAD 	FFast
-		STORE 	DVel
-	MoveBackABit:
-		; Move backwards a little
-		CALL 	ControlMovement
-		
-		; Check distance
-		IN 		XPOS
-		SUB 	EncoderX
-		JPOS 	MoveBackABit
-		
-		; Now stop, turn around, and go back home
-		CALL	StopMovement
-		JUMP	TurnAroundGoHome
+		JUMP	NewKeepCheck
 		
 	TurnAroundGoHome:
 		CALL	StopMovement
@@ -209,8 +175,8 @@ BackAtHome:
 	CALL 	Die
 	RETURN
 
-; GoHome function will have the robot go home after tagging
-; Assumes DE2Bot is facing a wall and there is a clear straight path to wall
+; ; GoHome function will have the robot go home after tagging
+; ; Assumes DE2Bot is facing a wall and there is a clear straight path to wall
 GoHome:
 	; Go towards wall then stop when close
 	IN 		MASK2
@@ -218,33 +184,67 @@ GoHome:
 	OUT 	SONAREN
 	LOADI 	FMid
 	STORE 	DVel
-	LOADI 	90
+	LOADI 	HomeAng
 	STORE 	DTheta
+; Detect1:
+; 	CALL 	ControlMovement
+; 	IN 		DIST2
+; 	ADDI 	-500
+; 	JPOS 	Detect1
+; 	IN	 	DIST3
+; 	ADDI 	-500
+; 	JPOS 	Detect1
+; 	; Rotate
+; 	CALL 	StopMovement
+; 	LOADI 	-60
+; 	STORE 	Angle
+; 	CALL  	Rotate
+; 	LOADI 	90
+; 	STORE 	DTheta
+; 	; Go Home till its close to wall
+; Detect2:
+; 	CALL	ControlMovement
+; 	IN 		DIST2
+; 	ADDI 	-500
+; 	JPOS 	Detect2
+; 	IN	 	DIST3
+; 	ADDI 	-500
+; 	JPOS 	Detect2
+; 	CALL 	StopMovement
+; 	JUMP 	BackAtHome
+	
+; GoHome:
+; 	; Go towards wall then when XPOS is close enough
+; 	LOADI 	FMid
+; 	STORE 	DVel
+; 	LOADI 	180
+; 	STORE 	DTheta
 Detect1:
 	CALL 	ControlMovement
-	IN 		DIST2
-	ADDI 	-500
-	JPOS 	Detect1
-	IN	 	DIST3
-	ADDI 	-500
+	IN 		XPos
+	ADDI 	-300 ; distance away from x origin
 	JPOS 	Detect1
 	; Rotate
-	CALL 	StopMovement
-	LOADI 	95
-	STORE 	Angle
-	CALL  	Rotate
-	LOADI 	180
+	;CALL 	StopMovement
+	;LOADI 	-55
+	;STORE 	Angle
+	;CALL  	Rotate
+	LOAD	HomeAng
 	STORE 	DTheta
-	; Go Home
+	; Go Home till its close to wall
 Detect2:
 	CALL	ControlMovement
-	IN 		DIST2
-	ADDI 	-500
+	IN 		YPos
+	CALL 	abs
+	ADDI 	-200
 	JPOS 	Detect2
-	IN	 	DIST3
-	ADDI 	-500
-	JPOS 	Detect2
-	CALL 	StopMovement
+	;IN 		DIST2
+	;ADDI 	-500
+	;JPOS 	Detect2
+	;IN	 	DIST3
+	;ADDI 	-500
+	;JPOS 	Detect2
+	;CALL 	StopMovement
 	JUMP 	BackAtHome
 
 ; Tag function will travel to an object X distance away, tag it, and rotate to face the wall
@@ -262,7 +262,6 @@ Tag:
 TagIt:
 	; Read sensor 2 and 3 till 310 mm
 	CALL 	ControlMovement
-	CALL 	UpdateTag
 	IN 		DIST2
 	ADDI 	-310
 	JNEG 	TagIt2
@@ -275,7 +274,7 @@ TagIt2:
 	; Update EncoderY (initial value)
 	IN   	YPOS
 	CALL 	Abs
-	ADDI 	370 ; 310 + 60
+	ADDI 	290 ; 310 + 30
 	STORE 	EncoderY
 TapTag:
 	; Travel a bit more
@@ -294,32 +293,53 @@ TapTag:
 	STORE 	EncoderY
 	LOAD 	RFast
 	STORE 	DVel
+	
 MoveBack:
-	; Move backwards a little
+	;Move backwards a little
 	CALL 	ControlMovement
 	; Check distance
 	IN 		YPOS
 	CALL 	Abs
 	SUB 	EncoderY
 	JPOS 	MoveBack
+	CALL 	StopMovement
 	; Rotate 180 and GoHome
-	LOADI 	180
-	STORE 	Angle
-	CALL 	Rotate
+	IN 		XPos
+	STORE 	ATanX
+	IN 		YPos
+	STORE 	ATanY
+	CALL 	ATan2
+	ADDI 	180 ;mess with change angle
+	CALL	mod360
+	STORE 	Dtheta
+	STORE	HomeAng
+	LOAD	ZERO
+	STORE	DVEL
 	CALL 	GoHome
-	RETURN
-; This subroutine updates the angle the robot should move
-UpdateTag:
-	RETURN
+	
+	
+MoveHome:
+	In		Theta
+	Sub		Dtheta
+	Call 	ABS
+	ADDI	-10
+	JNEG 	GoHome
+	Jump 	MoveHome
+; MoveBack:
+; 	; Move backwards a little
+; 	CALL 	ControlMovement
+; 	; Check distance
+; 	IN 		YPOS
+; 	CALL 	Abs
+; 	SUB 	EncoderY
+; 	JPOS 	MoveBack
+; 	; Rotate to face shorter wall
+; 	LOADI 	-60
+; 	STORE 	Angle
+; 	CALL 	Rotate
+; 	CALL 	GoHome
+; 	RETURN
 
-
-c7FFF: DW &H7FFF
-m16sA: DW 0 ; multiplicand
-m16sB: DW 0 ; multipler
-m16sc: DW 0 ; carry
-mcnt16s: DW 0 ; counter
-mres16sL: DW 0 ; result low
-mres16sH: DW 0 ; result high
 
 Ang0:		DW 90
 Ang1:		DW 44
@@ -386,7 +406,6 @@ Rotate:
 		; Check rotation direction
 		LOAD 	Angle
 		JNEG 	RotateCW ; else RotateCC
-
 	; Rotate CounterClock
 	RotateCC:
 		LOAD 	FSlow
@@ -419,6 +438,142 @@ Rotate:
 		CALL 	StopMovement
 		LOAD 	Temp
 		RETURN
+		
+;******************************************************************************;
+; Atan2: 4-quadrant arctangent calculation                                     ;
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ;
+; Original code by Team AKKA, Spring 2015.                                     ;
+; Based on methods by Richard Lyons                                            ;
+; Code updated by Kevin Johnson to use software mult and div                   ;
+; No license or copyright applied.                                             ;
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ;
+; To use: store dX and dY in global variables AtanX and AtanY.                 ;
+; Call Atan2                                                                   ;
+; Result (angle [0,359]) is returned in AC                                     ;
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ;
+; Requires additional subroutines:                                             ;
+; - Mult16s: 16x16->32bit signed multiplication                                ;
+; - Div16s: 16/16->16R16 signed division                                       ;
+; - Abs: Absolute value                                                        ;
+; Requires additional constants:                                               ;
+; - One:     DW 1                                                              ;
+; - NegOne:  DW 0                                                              ;
+; - LowByte: DW &HFF                                                           ;
+;******************************************************************************;
+Atan2:
+	LOAD   AtanY
+	CALL   Abs          ; abs(y)
+	STORE  AtanT
+	LOAD   AtanX        ; abs(x)
+	CALL   Abs
+	SUB    AtanT        ; abs(x) - abs(y)
+	JNEG   A2_sw        ; if abs(y) > abs(x), switch arguments.
+	LOAD   AtanX        ; Octants 1, 4, 5, 8
+	JNEG   A2_R3
+	CALL   A2_calc      ; Octants 1, 8
+	JNEG   A2_R1n
+	RETURN              ; Return raw value if in octant 1
+A2_R1n: ; region 1 negative
+	ADDI   360          ; Add 360 if we are in octant 8
+	RETURN
+A2_R3: ; region 3
+	CALL   A2_calc      ; Octants 4, 5            
+	ADDI   180          ; theta' = theta + 180
+	RETURN
+A2_sw: ; switch arguments; octants 2, 3, 6, 7 
+	LOAD   AtanY        ; Swap input arguments
+	STORE  AtanT
+	LOAD   AtanX
+	STORE  AtanY
+	LOAD   AtanT
+	STORE  AtanX
+	JPOS   A2_R2        ; If Y positive, octants 2,3
+	CALL   A2_calc      ; else octants 6, 7
+	CALL   Neg          ; Negatge the number
+	ADDI   270          ; theta' = 270 - theta
+	RETURN
+A2_R2: ; region 2
+	CALL   A2_calc      ; Octants 2, 3
+	CALL   Neg          ; negate the angle
+	ADDI   90           ; theta' = 90 - theta
+	RETURN
+A2_calc:
+	; calculates R/(1 + 0.28125*R^2)
+	LOAD   AtanY
+	STORE  d16sN        ; Y in numerator
+	LOAD   AtanX
+	STORE  d16sD        ; X in denominator
+	CALL   A2_div       ; divide
+	LOAD   dres16sQ     ; get the quotient (remainder ignored)
+	STORE  AtanRatio
+	STORE  m16sA
+	STORE  m16sB
+	CALL   A2_mult      ; X^2
+	STORE  m16sA
+	LOAD   A2c
+	STORE  m16sB
+	CALL   A2_mult
+	ADDI   256          ; 256/256+0.28125X^2
+	STORE  d16sD
+	LOAD   AtanRatio
+	STORE  d16sN        ; Ratio in numerator
+	CALL   A2_div       ; divide
+	LOAD   dres16sQ     ; get the quotient (remainder ignored)
+	STORE  m16sA        ; <= result in radians
+	LOAD   A2cd         ; degree conversion factor
+	STORE  m16sB
+	CALL   A2_mult      ; convert to degrees
+	STORE  AtanT
+	SHIFT  -7           ; check 7th bit
+	AND    One
+	JZERO  A2_rdwn      ; round down
+	LOAD   AtanT
+	SHIFT  -8
+	ADDI   1            ; round up
+	RETURN
+A2_rdwn:
+	LOAD   AtanT
+	SHIFT  -8           ; round down
+	RETURN
+A2_mult: ; multiply, and return bits 23..8 of result
+	CALL   Mult16s
+	LOAD   mres16sH
+	SHIFT  8            ; move high word of result up 8 bits
+	STORE  mres16sH
+	LOAD   mres16sL
+	SHIFT  -8           ; move low word of result down 8 bits
+	AND    LowByte
+	OR     mres16sH     ; combine high and low words of result
+	RETURN
+A2_div: ; 16-bit division scaled by 256, minimizing error
+	LOADI  9            ; loop 8 times (256 = 2^8)
+	STORE  AtanT
+A2_DL:
+	LOAD   AtanT
+	ADDI   -1
+	JPOS   A2_DN        ; not done; continue shifting
+	CALL   Div16s       ; do the standard division
+	RETURN
+A2_DN:
+	STORE  AtanT
+	LOAD   d16sN        ; start by trying to scale the numerator
+	SHIFT  1
+	XOR    d16sN        ; if the sign changed,
+	JNEG   A2_DD        ; switch to scaling the denominator
+	XOR    d16sN        ; get back shifted version
+	STORE  d16sN
+	JUMP   A2_DL
+A2_DD:
+	LOAD   d16sD
+	SHIFT  -1           ; have to scale denominator
+	STORE  d16sD
+	JUMP   A2_DL
+AtanX:      DW 0
+AtanY:      DW 0
+AtanRatio:  DW 0        ; =y/x
+AtanT:      DW 0        ; temporary value
+A2c:        DW 72       ; 72/256=0.28125, with 8 fractional bits
+A2cd:       DW 14668    ; = 180/pi with 8 fractional bits
 
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
@@ -449,7 +604,7 @@ ControlMovement:
 	CALL   Neg         ; left wheel gets negative differential
 	ADD    DVel
 	CALL   CapVel
-	OUT    LVELCMD
+	OUT    LVELCMD 
 
 	RETURN
 
@@ -478,6 +633,136 @@ Neg:
 	ADDI   1            ; Add one (i.e. negate number)
 Abs_r:
 	RETURN
+
+
+;*******************************************************************************
+; Mult16s:  16x16 -> 32-bit signed multiplication
+; Based on Booth's algorithm.
+; Written by Kevin Johnson.  No licence or copyright applied.
+; Warning: does not work with factor B = -32768 (most-negative number).
+; To use:
+; - Store factors in m16sA and m16sB.
+; - Call Mult16s
+; - Result is stored in mres16sH and mres16sL (high and low words).
+;*******************************************************************************
+Mult16s:
+	LOADI  0
+	STORE  m16sc        ; clear carry
+	STORE  mres16sH     ; clear result
+	LOADI  16           ; load 16 to counter
+Mult16s_loop:
+	STORE  mcnt16s      
+	LOAD   m16sc        ; check the carry (from previous iteration)
+	JZERO  Mult16s_noc  ; if no carry, move on
+	LOAD   mres16sH     ; if a carry, 
+	ADD    m16sA        ;  add multiplicand to result H
+	STORE  mres16sH
+Mult16s_noc: ; no carry
+	LOAD   m16sB
+	AND    One          ; check bit 0 of multiplier
+	STORE  m16sc        ; save as next carry
+	JZERO  Mult16s_sh   ; if no carry, move on to shift
+	LOAD   mres16sH     ; if bit 0 set,
+	SUB    m16sA        ;  subtract multiplicand from result H
+	STORE  mres16sH
+Mult16s_sh:
+	LOAD   m16sB
+	SHIFT  -1           ; shift result L >>1
+	AND    c7FFF        ; clear msb
+	STORE  m16sB
+	LOAD   mres16sH     ; load result H
+	SHIFT  15           ; move lsb to msb
+	OR     m16sB
+	STORE  m16sB        ; result L now includes carry out from H
+	LOAD   mres16sH
+	SHIFT  -1
+	STORE  mres16sH     ; shift result H >>1
+	LOAD   mcnt16s
+	ADDI   -1           ; check counter
+	JPOS   Mult16s_loop ; need to iterate 16 times
+	LOAD   m16sB
+	STORE  mres16sL     ; multiplier and result L shared a word
+	RETURN              ; Done
+c7FFF: DW &H7FFF
+m16sA: DW 0 ; multiplicand
+m16sB: DW 0 ; multipler
+m16sc: DW 0 ; carry
+mcnt16s: DW 0 ; counter
+mres16sL: DW 0 ; result low
+mres16sH: DW 0 ; result high
+		
+;*******************************************************************************
+; Div16s:  16/16 -> 16 R16 signed division
+; Written by Kevin Johnson.  No licence or copyright applied.
+; Warning: results undefined if denominator = 0.
+; To use:
+; - Store numerator in d16sN and denominator in d16sD.
+; - Call Div16s
+; - Result is stored in dres16sQ and dres16sR (quotient and remainder).
+; Requires Abs subroutine
+;*******************************************************************************
+Div16s:
+	LOADI  0
+	STORE  dres16sR     ; clear remainder result
+	STORE  d16sC1       ; clear carry
+	LOAD   d16sN
+	XOR    d16sD
+	STORE  d16sS        ; sign determination = N XOR D
+	LOADI  17
+	STORE  d16sT        ; preload counter with 17 (16+1)
+	LOAD   d16sD
+	CALL   Abs          ; take absolute value of denominator
+	STORE  d16sD
+	LOAD   d16sN
+	CALL   Abs          ; take absolute value of numerator
+	STORE  d16sN
+Div16s_loop:
+	LOAD   d16sN
+	SHIFT  -15          ; get msb
+	AND    One          ; only msb (because shift is arithmetic)
+	STORE  d16sC2       ; store as carry
+	LOAD   d16sN
+	SHIFT  1            ; shift <<1
+	OR     d16sC1       ; with carry
+	STORE  d16sN
+	LOAD   d16sT
+	ADDI   -1           ; decrement counter
+	JZERO  Div16s_sign  ; if finished looping, finalize result
+	STORE  d16sT
+	LOAD   dres16sR
+	SHIFT  1            ; shift remainder
+	OR     d16sC2       ; with carry from other shift
+	SUB    d16sD        ; subtract denominator from remainder
+	JNEG   Div16s_add   ; if negative, need to add it back
+	STORE  dres16sR
+	LOADI  1
+	STORE  d16sC1       ; set carry
+	JUMP   Div16s_loop
+Div16s_add:
+	ADD    d16sD        ; add denominator back in
+	STORE  dres16sR
+	LOADI  0
+	STORE  d16sC1       ; clear carry
+	JUMP   Div16s_loop
+Div16s_sign:
+	LOAD   d16sN
+	STORE  dres16sQ     ; numerator was used to hold quotient result
+	LOAD   d16sS        ; check the sign indicator
+	JNEG   Div16s_neg
+	RETURN
+Div16s_neg:
+	LOAD   dres16sQ     ; need to negate the result
+	CALL   Neg
+	STORE  dres16sQ
+	RETURN	
+d16sN: DW 0 ; numerator
+d16sD: DW 0 ; denominator
+d16sS: DW 0 ; sign value
+d16sT: DW 0 ; temp counter
+d16sC1: DW 0 ; carry value
+d16sC2: DW 0 ; carry value
+dres16sQ: DW 0 ; quotient result
+dres16sR: DW 0 ; remainder result
 
 ; Subroutine to wait (block) for 1 second
 Wait1:
@@ -563,13 +848,6 @@ GetBattLvl:
 	IN     I2C_DATA    ; get the returned data
 	RETURN
 
-; Subroutine for Cosine of an angle
-; input THETA as degree
-; output x_val as cosine of THETA
-; using Taylor series -- will be accurate between -pi/2 and pi/2
-
-; NEED MULT16S, lowbyte DW &HFF, DIV16S, neg
-; TODO removed cause errors :(
 
 ;***************************************************************
 ;* Variables
@@ -579,10 +857,10 @@ WaitTime:			DW 0
 Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
-ErrMargin: 			DW 4
+ErrMargin: 			DW 5
 EncoderY: 			DW 0		; Stores current value of encoder in Y direction
-EncoderX:			DW 0		; Stores current value of encoder in X direction
 TagAng: 			DW -90		; Tells robot travel ang when tagging
+HomeAng:			DW 0		; Tells robot what angle to go home at
 
 y_val:			DW 0
 THETAtemp2:		DW 0
