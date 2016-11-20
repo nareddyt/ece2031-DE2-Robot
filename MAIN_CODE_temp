@@ -57,7 +57,6 @@ WaitForUser:
 Main:
 		; Reset odometer in case wheels move after programming
 		OUT 	RESETPOS
-	
 		; Repeat this portion forever, waiting for user input each time we return home
 		LOAD	ZERO
 		JUMP	MainLoopForever
@@ -65,7 +64,13 @@ Main:
 	MainLoopForever:	
 		CALL	FindAndTagClosestObject
 		
+		;CALL	WaitForUserSub
 		
+		; Reset odometer in case wheels move after programming
+		OUT 	RESETPOS
+		
+		; Loop again
+		;JUMP	MainLoopForever
 
 ; Sometimes it's useful to permanently stop execution.
 ; This will also catch the execution if it accidentally
@@ -91,18 +96,36 @@ Die:
 ; Important Subroutines
 ;**************************************************
 
+WaitForUserSub:
+	; This loop will wait for the user to press PB3, to ensure that
+	; they have a chance to prepare for any movement in the main code.
+	IN     TIMER       ; We'll blink the LEDs above PB3
+	AND    Mask1
+	SHIFT  5           ; Both LEDG6 and LEDG7
+	STORE  Temp        ; (overkill, but looks nice)
+	SHIFT  1
+	OR     Temp
+	OUT    XLEDS
+	IN     XIO         ; XIO contains KEYs
+	AND    Mask2       ; KEY3 mask (KEY0 is reset and can't be read)
+	JPOS   WaitForUserSub ; not ready (KEYs are active-low, hence JPOS)
+	LOAD   Zero
+	OUT    XLEDS       ; clear LEDs once ready to continue
+	RETURN
+
 	TravelDist:		DW 0
 ; Goes to the x position the closest object is located at
 ; Turns toward object and tags it
 ; Then returns back home, retracing its path
 FindAndTagClosestObject:
+		OUT		RESETPOS
 		LOAD	MASK5
-		OR		MASK3
 		OUT		SONAREN
 
 	NewKeepCheck:		
 		IN		DIST5
 		STORE	TravelDist
+		OUT		SSEG1
 		SUB		MaxShort
 		JNEG	NewFound
 		
@@ -117,56 +140,7 @@ FindAndTagClosestObject:
 		STORE 	DVel
 		; Move robot
 		CALL 	ControlMovement
-		
-		; Check if we are about to run into anything
-		IN 		DIST3
-		OUT		SSEG2
-		ADDI 	-310
-		JPOS 	NewKeepCheck
-		
-		; We detected an object in the robot's movement path!
-		; Move forward and tag
-		; Update EncoderX (initial value)
-		IN   	XPOS
-		ADDI 	325
-		STORE 	EncoderX
-		
-	HitDetectedAlongPath:
-		; Travel a bit more
-		; Move robot
-		LOADI 	0
-		STORE 	DTheta
-		LOAD 	FFast
-		STORE 	DVel
-		CALL 	ControlMovement
-		
-		; Check distance traveled
-		IN 		XPOS
-		SUB 	EncoderX
-		JNEG 	HitDetectedAlongPath
-	
-		; We just hit the object!
-		; Prepare to move backwards a little
-		; Update EncoderY and Control Movement
-		IN 		XPOS
-		ADDI 	-30
-		STORE 	EncoderX
-		LOADI 	0
-		STORE 	DTheta
-		LOAD 	FFast
-		STORE 	DVel
-	MoveBackABit:
-		; Move backwards a little
-		CALL 	ControlMovement
-		
-		; Check distance
-		IN 		XPOS
-		SUB 	EncoderX
-		JPOS 	MoveBackABit
-		
-		; Now stop, turn around, and go back home
-		CALL	StopMovement
-		JUMP	TurnAroundGoHome
+		JUMP	NewKeepCheck
 		
 	TurnAroundGoHome:
 		CALL	StopMovement
@@ -198,30 +172,64 @@ FindAndTagClosestObject:
 BackAtHome:
 	; TODO wait for user input to start again
 	; For now just call die
-	JUMP 	Die
+	CALL 	Die
+	RETURN
 
-; GoHome function will have the robot go home after tagging
-; Assumes DE2Bot is facing a wall and there is a clear straight path to wall
+; ; GoHome function will have the robot go home after tagging
+; ; Assumes DE2Bot is facing a wall and there is a clear straight path to wall
 GoHome:
 	; Go towards wall then stop when close
-	LOAD	ZERO
+	IN 		MASK2
+	OR 		MASK3
 	OUT 	SONAREN
 	LOADI 	FMid
 	STORE 	DVel
-	LOAD 	HomeAng
+	LOADI 	HomeAng
 	STORE 	DTheta
+; Detect1:
+; 	CALL 	ControlMovement
+; 	IN 		DIST2
+; 	ADDI 	-500
+; 	JPOS 	Detect1
+; 	IN	 	DIST3
+; 	ADDI 	-500
+; 	JPOS 	Detect1
+; 	; Rotate
+; 	CALL 	StopMovement
+; 	LOADI 	-60
+; 	STORE 	Angle
+; 	CALL  	Rotate
+; 	LOADI 	90
+; 	STORE 	DTheta
+; 	; Go Home till its close to wall
+; Detect2:
+; 	CALL	ControlMovement
+; 	IN 		DIST2
+; 	ADDI 	-500
+; 	JPOS 	Detect2
+; 	IN	 	DIST3
+; 	ADDI 	-500
+; 	JPOS 	Detect2
+; 	CALL 	StopMovement
+; 	JUMP 	BackAtHome
+	
 ; GoHome:
 ; 	; Go towards wall then when XPOS is close enough
 ; 	LOADI 	FMid
 ; 	STORE 	DVel
-; 	LOAD 	Angle
+; 	LOADI 	180
 ; 	STORE 	DTheta
 Detect1:
 	CALL 	ControlMovement
 	IN 		XPos
 	ADDI 	-300 ; distance away from x origin
 	JPOS 	Detect1
-	LOADI	60
+	; Rotate
+	;CALL 	StopMovement
+	;LOADI 	-55
+	;STORE 	Angle
+	;CALL  	Rotate
+	LOADI 	60
 	STORE 	DTheta
 	; Go Home till its close to wall
 Detect2:
@@ -230,8 +238,14 @@ Detect2:
 	CALL 	abs
 	ADDI 	-200
 	JPOS 	Detect2
+	;IN 		DIST2
+	;ADDI 	-500
+	;JPOS 	Detect2
+	;IN	 	DIST3
+	;ADDI 	-500
+	;JPOS 	Detect2
+	;CALL 	StopMovement
 	JUMP 	BackAtHome
-
 
 ; Tag function will travel to an object X distance away, tag it, and rotate to face the wall
 ; Assumes DE2Bot is facing object and there is a clear, linear path to object
@@ -248,7 +262,6 @@ Tag:
 TagIt:
 	; Read sensor 2 and 3 till 310 mm
 	CALL 	ControlMovement
-	CALL 	UpdateTag
 	IN 		DIST2
 	ADDI 	-310
 	JNEG 	TagIt2
@@ -261,7 +274,7 @@ TagIt2:
 	; Update EncoderY (initial value)
 	IN   	YPOS
 	CALL 	Abs
-	ADDI 	280 ; 180+100
+	ADDI 	280 ; 310 + 30
 	STORE 	EncoderY
 TapTag:
 	; Travel a bit more
@@ -276,57 +289,56 @@ TapTag:
 	; Update EncoderY and Control Movement
 	IN 		YPOS
 	CALL 	Abs
-	ADDI 	-60  ;move back this distance
+	ADDI 	-30
 	STORE 	EncoderY
 	LOAD 	RFast
 	STORE 	DVel
 	
 MoveBack:
-	IN		XPOS
-	SUB     TwoFeet	
-	JNEG	GottaGoBack
-	JUMP	ConwithBack
-	
-	GottaGoBack:
-		IN 		YPOS
-		CALL    ABS
-		ADDI	-100
-		JNEG	BackAtHome
-		LOAD 	RMid
-		STORE 	DVel
-		LOADI	-90
-		STORE	DTheta
-		CALL	ControlMovement
-		JUMP	GottaGoBack	
-	
-	ConWithBack:
-
-	; Move backwards a little
+	;Move backwards a little
 	CALL 	ControlMovement
 	; Check distance
 	IN 		YPOS
 	CALL 	Abs
 	SUB 	EncoderY
 	JPOS 	MoveBack
+	CALL 	StopMovement
 	; Rotate 180 and GoHome
-	
 	IN 		XPos
- 	STORE 	ATanX
- 	IN 		YPos
+	STORE 	ATanX
+	IN 		YPos
 	STORE 	ATanY
- 	CALL 	ATan2
- 	ADDI	150
- 	CALL	mod360
-	STORE 	HomeAng
-	STORE 	DTheta
+	CALL 	ATan2
+	ADDI 	180 ;mess with change angle
+	CALL	mod360
+	STORE 	Dtheta
+	STORE	HomeAng
 	LOAD	ZERO
 	STORE	DVEL
 	CALL 	GoHome
-	RETURN
-; This subroutine updates the angle the robot should move
-UpdateTag:
-	RETURN
-
+	
+	
+MoveHome:
+	In		Theta
+	Sub		Dtheta
+	Call 	ABS
+	ADDI	-10
+	JNEG 	GoHome
+	Jump 	MoveHome
+; MoveBack:
+; 	; Move backwards a little
+; 	CALL 	ControlMovement
+; 	; Check distance
+; 	IN 		YPOS
+; 	CALL 	Abs
+; 	SUB 	EncoderY
+; 	JPOS 	MoveBack
+; 	; Rotate to face shorter wall
+; 	LOADI 	-60
+; 	STORE 	Angle
+; 	CALL 	Rotate
+; 	CALL 	GoHome
+; 	RETURN
 
 
 Ang0:		DW 90
@@ -394,7 +406,6 @@ Rotate:
 		; Check rotation direction
 		LOAD 	Angle
 		JNEG 	RotateCW ; else RotateCC
-
 	; Rotate CounterClock
 	RotateCC:
 		LOAD 	FSlow
@@ -427,6 +438,7 @@ Rotate:
 		CALL 	StopMovement
 		LOAD 	Temp
 		RETURN
+		
 ;******************************************************************************;
 ; Atan2: 4-quadrant arctangent calculation                                     ;
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ;
@@ -592,7 +604,7 @@ ControlMovement:
 	CALL   Neg         ; left wheel gets negative differential
 	ADD    DVel
 	CALL   CapVel
-	OUT    LVELCMD
+	OUT    LVELCMD 
 
 	RETURN
 
@@ -621,6 +633,8 @@ Neg:
 	ADDI   1            ; Add one (i.e. negate number)
 Abs_r:
 	RETURN
+
+
 ;*******************************************************************************
 ; Mult16s:  16x16 -> 32-bit signed multiplication
 ; Based on Booth's algorithm.
@@ -749,6 +763,7 @@ d16sC1: DW 0 ; carry value
 d16sC2: DW 0 ; carry value
 dres16sQ: DW 0 ; quotient result
 dres16sR: DW 0 ; remainder result
+
 ; Subroutine to wait (block) for 1 second
 Wait1:
 	OUT    TIMER
@@ -833,13 +848,6 @@ GetBattLvl:
 	IN     I2C_DATA    ; get the returned data
 	RETURN
 
-; Subroutine for Cosine of an angle
-; input THETA as degree
-; output x_val as cosine of THETA
-; using Taylor series -- will be accurate between -pi/2 and pi/2
-
-; NEED MULT16S, lowbyte DW &HFF, DIV16S, neg
-; TODO removed cause errors :(
 
 ;***************************************************************
 ;* Variables
@@ -849,11 +857,10 @@ WaitTime:			DW 0
 Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
-ErrMargin: 			DW 4
+ErrMargin: 			DW 5
 EncoderY: 			DW 0		; Stores current value of encoder in Y direction
-EncoderX:			DW 0		; Stores current value of encoder in X direction
 TagAng: 			DW -90		; Tells robot travel ang when tagging
-HomeAng:			DW 0		; Tells robot what angle to go 
+HomeAng:			DW 0		; Tells robot what angle to go home at
 
 y_val:			DW 0
 THETAtemp2:		DW 0
