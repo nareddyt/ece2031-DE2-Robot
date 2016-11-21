@@ -103,6 +103,7 @@ FindAndTagClosestObject:
 	NewKeepCheck:		
 		IN		DIST5
 		STORE	TravelDist
+		OUT		SSEG1
 		SUB		MaxShort
 		JNEG	NewFound
 		
@@ -128,7 +129,7 @@ FindAndTagClosestObject:
 		; Move forward and tag
 		; Update EncoderX (initial value)
 		IN   	XPOS
-		ADDI 	325
+		ADDI 	310
 		STORE 	EncoderX
 		
 	HitDetectedAlongPath:
@@ -144,8 +145,10 @@ FindAndTagClosestObject:
 		IN 		XPOS
 		SUB 	EncoderX
 		JNEG 	HitDetectedAlongPath
-	
+		
 		; We just hit the object!
+		CALL	StopMovement
+		
 		; Prepare to move backwards a little
 		; Update EncoderY and Control Movement
 		IN 		XPOS
@@ -153,7 +156,7 @@ FindAndTagClosestObject:
 		STORE 	EncoderX
 		LOADI 	0
 		STORE 	DTheta
-		LOAD 	FFast
+		LOAD 	RFast
 		STORE 	DVel
 	MoveBackABit:
 		; Move backwards a little
@@ -166,6 +169,9 @@ FindAndTagClosestObject:
 		
 		; Now stop, turn around, and go back home
 		CALL	StopMovement
+		
+		; TODO add in edge case where it is really close
+		
 		JUMP	TurnAroundGoHome
 		
 	TurnAroundGoHome:
