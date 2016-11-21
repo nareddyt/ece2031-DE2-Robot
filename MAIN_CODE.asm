@@ -103,6 +103,7 @@ FindAndTagClosestObject:
 	NewKeepCheck:		
 		IN		DIST5
 		STORE	TravelDist
+		OUT		SSEG1
 		SUB		MaxShort
 		JNEG	NewFound
 		
@@ -125,10 +126,12 @@ FindAndTagClosestObject:
 		JPOS 	NewKeepCheck
 		
 		; We detected an object in the robot's movement path!
+		CALL	ObjectFoundBeep
+		
 		; Move forward and tag
 		; Update EncoderX (initial value)
 		IN   	XPOS
-		ADDI 	325
+		ADDI 	310
 		STORE 	EncoderX
 		
 	HitDetectedAlongPath:
@@ -144,8 +147,10 @@ FindAndTagClosestObject:
 		IN 		XPOS
 		SUB 	EncoderX
 		JNEG 	HitDetectedAlongPath
-	
+		
 		; We just hit the object!
+		CALL	StopMovement
+		
 		; Prepare to move backwards a little
 		; Update EncoderY and Control Movement
 		IN 		XPOS
@@ -153,7 +158,7 @@ FindAndTagClosestObject:
 		STORE 	EncoderX
 		LOADI 	0
 		STORE 	DTheta
-		LOAD 	FFast
+		LOAD 	RFast
 		STORE 	DVel
 	MoveBackABit:
 		; Move backwards a little
@@ -166,6 +171,9 @@ FindAndTagClosestObject:
 		
 		; Now stop, turn around, and go back home
 		CALL	StopMovement
+		
+		; TODO add in edge case where it is really close
+		
 		JUMP	TurnAroundGoHome
 		
 	TurnAroundGoHome:
@@ -187,6 +195,8 @@ FindAndTagClosestObject:
 	NewFound:
 		; Stop the robot
 		CALL	StopMovement
+		
+		CALL	ObjectFoundBeep
 		
 		; Call Randy's tag subroutine
 		CALL 	Tag
@@ -257,6 +267,9 @@ TagIt:
 	JNEG 	TagIt2
 	JUMP 	TagIt
 TagIt2:
+	; We found the object
+	CALL	ObjectFoundBeep	
+
 	; Move 310 mm forward and tag
 	; Update EncoderY (initial value)
 	IN   	YPOS
@@ -300,33 +313,39 @@ MoveBack:
 		JUMP	GottaGoBack	
 	
 	ConWithBack:
+		; Move backwards a little
+		CALL 	ControlMovement
+		; Check distance
+		IN 		YPOS
+		CALL 	Abs
+		SUB 	EncoderY
+		JPOS 	MoveBack
+		; Rotate 180 and GoHome
+		
+		IN 		XPos
+	 	STORE 	ATanX
+	 	IN 		YPos
+		STORE 	ATanY
+	 	CALL 	ATan2
+	 	ADDI	150
+	 	CALL	mod360
+		STORE 	HomeAng
+		STORE 	DTheta
+		LOAD	ZERO
+		STORE	DVEL
+		CALL 	GoHome
+		RETURN
 
-	; Move backwards a little
-	CALL 	ControlMovement
-	; Check distance
-	IN 		YPOS
-	CALL 	Abs
-	SUB 	EncoderY
-	JPOS 	MoveBack
-	; Rotate 180 and GoHome
-	
-	IN 		XPos
- 	STORE 	ATanX
- 	IN 		YPos
-	STORE 	ATanY
- 	CALL 	ATan2
- 	ADDI	150
- 	CALL	mod360
-	STORE 	HomeAng
-	STORE 	DTheta
-	LOAD	ZERO
-	STORE	DVEL
-	CALL 	GoHome
-	RETURN
 ; This subroutine updates the angle the robot should move
 UpdateTag:
 	RETURN
-
+	
+BeepPitch:	DW &H0810
+	
+ObjectFoundBeep:
+	LOAD	BeepPitch
+	OUT		BEEP
+	RETURN
 
 
 Ang0:		DW 90
