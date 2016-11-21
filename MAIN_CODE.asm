@@ -126,6 +126,8 @@ FindAndTagClosestObject:
 		JPOS 	NewKeepCheck
 		
 		; We detected an object in the robot's movement path!
+		CALL	ObjectFoundBeep
+		
 		; Move forward and tag
 		; Update EncoderX (initial value)
 		IN   	XPOS
@@ -193,6 +195,8 @@ FindAndTagClosestObject:
 	NewFound:
 		; Stop the robot
 		CALL	StopMovement
+		
+		CALL	ObjectFoundBeep
 		
 		; Call Randy's tag subroutine
 		CALL 	Tag
@@ -263,6 +267,9 @@ TagIt:
 	JNEG 	TagIt2
 	JUMP 	TagIt
 TagIt2:
+	; We found the object
+	CALL	ObjectFoundBeep	
+
 	; Move 310 mm forward and tag
 	; Update EncoderY (initial value)
 	IN   	YPOS
@@ -306,33 +313,39 @@ MoveBack:
 		JUMP	GottaGoBack	
 	
 	ConWithBack:
+		; Move backwards a little
+		CALL 	ControlMovement
+		; Check distance
+		IN 		YPOS
+		CALL 	Abs
+		SUB 	EncoderY
+		JPOS 	MoveBack
+		; Rotate 180 and GoHome
+		
+		IN 		XPos
+	 	STORE 	ATanX
+	 	IN 		YPos
+		STORE 	ATanY
+	 	CALL 	ATan2
+	 	ADDI	150
+	 	CALL	mod360
+		STORE 	HomeAng
+		STORE 	DTheta
+		LOAD	ZERO
+		STORE	DVEL
+		CALL 	GoHome
+		RETURN
 
-	; Move backwards a little
-	CALL 	ControlMovement
-	; Check distance
-	IN 		YPOS
-	CALL 	Abs
-	SUB 	EncoderY
-	JPOS 	MoveBack
-	; Rotate 180 and GoHome
-	
-	IN 		XPos
- 	STORE 	ATanX
- 	IN 		YPos
-	STORE 	ATanY
- 	CALL 	ATan2
- 	ADDI	150
- 	CALL	mod360
-	STORE 	HomeAng
-	STORE 	DTheta
-	LOAD	ZERO
-	STORE	DVEL
-	CALL 	GoHome
-	RETURN
 ; This subroutine updates the angle the robot should move
 UpdateTag:
 	RETURN
-
+	
+BeepPitch:	DW &H0810
+	
+ObjectFoundBeep:
+	LOAD	BeepPitch
+	OUT		BEEP
+	RETURN
 
 
 Ang0:		DW 90
