@@ -114,7 +114,7 @@ FindAndTagClosestObject:
 		
 		LOADI 	0
 		STORE 	DTheta
-		LOAD 	FFast
+		LOADI 	FMid ;Sweeping speed
 		STORE 	DVel
 		; Move robot
 		CALL 	ControlMovement
@@ -151,42 +151,15 @@ FindAndTagClosestObject:
 		; We just hit the object!
 		CALL	StopMovement
 		
-		; Prepare to move backwards a little
-		; Update EncoderY and Control Movement
-		IN 		XPOS
-		ADDI 	-30
-		STORE 	EncoderX
-		LOADI 	0
-		STORE 	DTheta
-		LOAD 	RFast
-		STORE 	DVel
-	MoveBackABit:
-		; Move backwards a little
-		CALL 	ControlMovement
-		
-		; Check distance
-		IN 		XPOS
-		SUB 	EncoderX
-		JPOS 	MoveBackABit
-		
-		; Now stop, turn around, and go back home
-		CALL	StopMovement
-		
-		; TODO add in edge case where it is really close
-		
 		JUMP	TurnAroundGoHome
 		
 	TurnAroundGoHome:
 		CALL	StopMovement
 		
-		LOADI	-160
-		STORE	Angle
-		CALL	Rotate
-		
 	GoingHome:
-		LOADI 	180
+		LOADI 	0
 		STORE 	DTheta
-		LOAD 	FFast
+		LOAD 	RFast
 		STORE 	DVel
 		; Move robot
 		CALL 	ControlMovement
@@ -256,6 +229,12 @@ Tag:
 	LOAD 	FMid
 	STORE 	DVel
 TagIt:
+	; Check if you're outside the boundary
+	; If outside, go back home
+	IN 		YPos
+	CALL 	abs
+	SUB 	MaxShort
+	JPOS 	TapTag ; if it reaches the end will go home
 	; Read sensor 2 and 3 till 310 mm
 	CALL 	ControlMovement
 	CALL 	UpdateTag
@@ -266,6 +245,7 @@ TagIt:
 	ADDI 	-310
 	JNEG 	TagIt2
 	JUMP 	TagIt
+	
 TagIt2:
 	; We found the object
 	CALL	ObjectFoundBeep	
@@ -274,7 +254,7 @@ TagIt2:
 	; Update EncoderY (initial value)
 	IN   	YPOS
 	CALL 	Abs
-	ADDI 	280 ; 180+100
+	ADDI 	190 ; move forward this distance
 	STORE 	EncoderY
 TapTag:
 	; Travel a bit more
@@ -289,7 +269,7 @@ TapTag:
 	; Update EncoderY and Control Movement
 	IN 		YPOS
 	CALL 	Abs
-	ADDI 	-60  ;move back this distance
+	ADDI 	-100  ;move back this distance
 	STORE 	EncoderY
 	LOAD 	RFast
 	STORE 	DVel
@@ -299,8 +279,9 @@ MoveBack:
 	SUB     TwoFeet	
 	JNEG	GottaGoBack
 	JUMP	ConwithBack
-	
+	; if object is an edge case, just go straight backwards
 	GottaGoBack:
+		; travel backwards and check YPos to see if you're home
 		IN 		YPOS
 		CALL    ABS
 		ADDI	-100
@@ -327,7 +308,7 @@ MoveBack:
 	 	IN 		YPos
 		STORE 	ATanY
 	 	CALL 	ATan2
-	 	ADDI	150
+	 	ADDI	155
 	 	CALL	mod360
 		STORE 	HomeAng
 		STORE 	DTheta
@@ -340,7 +321,7 @@ MoveBack:
 UpdateTag:
 	RETURN
 	
-BeepPitch:	DW &H0810
+BeepPitch:	DW 0864
 	
 ObjectFoundBeep:
 	LOAD	BeepPitch
