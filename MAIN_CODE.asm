@@ -104,8 +104,13 @@ FindAndTagClosestObject:
 		IN		DIST5
 		STORE	TravelDist
 		OUT		SSEG1
-		SUB		MaxShort
+		SUB		MaxShort ;If less than max, then object found
+		ADDI	310
+		;TODO case where object is within rotating distance 290 increments (1 foot)
+		
 		JNEG	NewFound
+		ADDI	-310
+		JNEG	RotateTag ;If the object is less than 1 foot to the right the bot, perform rotating tag
 		
 		IN		XPOS
 		SUB		MaxLong
@@ -114,7 +119,7 @@ FindAndTagClosestObject:
 		
 		LOADI 	0
 		STORE 	DTheta
-		LOADI 	FMid ;Sweeping speed
+		LOAD 	FMid ;Sweeping speed
 		STORE 	DVel
 		; Move robot
 		CALL 	ControlMovement
@@ -131,7 +136,7 @@ FindAndTagClosestObject:
 		; Move forward and tag
 		; Update EncoderX (initial value)
 		IN   	XPOS
-		ADDI 	310
+		ADDI 	260  ;Forward tagging distance
 		STORE 	EncoderX
 		
 	HitDetectedAlongPath:
@@ -176,6 +181,22 @@ FindAndTagClosestObject:
 
 		; Return to main
 		RETURN
+		
+	RotateTag:
+		;Rotate, tap, go home if object is really close to the right of the bot while sweeping
+		;and not captured by Teju's object in front of bot code
+		CALL	StopMovement
+		CALL	ObjectFoundBeep
+		Load	Angle
+		Store	-30
+		Call 	Rotate
+		Load	Angle
+		Store	30
+		Call	Rotate
+		Jump	GoingHome
+		
+		
+		
 
 ; We are back at home now
 BackAtHome:
@@ -254,7 +275,7 @@ TagIt2:
 	; Update EncoderY (initial value)
 	IN   	YPOS
 	CALL 	Abs
-	ADDI 	190 ; move forward this distance
+	ADDI 	150 ; move forward this distance
 	STORE 	EncoderY
 TapTag:
 	; Travel a bit more
