@@ -114,7 +114,7 @@ FindAndTagClosestObject:
 		
 		LOADI 	0
 		STORE 	DTheta
-		LOADI 	FMid ;Sweeping speed
+		LOAD 	FMid ;Sweeping speed
 		STORE 	DVel
 		; Move robot
 		CALL 	ControlMovement
