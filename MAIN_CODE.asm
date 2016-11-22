@@ -234,7 +234,7 @@ TagIt:
 	IN 		YPos
 	CALL 	abs
 	SUB 	MaxShort
-	JPOS 	MoveBack
+	JPOS 	TapTag ; if it reaches the end will go home
 	; Read sensor 2 and 3 till 310 mm
 	CALL 	ControlMovement
 	CALL 	UpdateTag
@@ -254,7 +254,7 @@ TagIt2:
 	; Update EncoderY (initial value)
 	IN   	YPOS
 	CALL 	Abs
-	ADDI 	220 ; move forward this distance
+	ADDI 	190 ; move forward this distance
 	STORE 	EncoderY
 TapTag:
 	; Travel a bit more
@@ -308,7 +308,7 @@ MoveBack:
 	 	IN 		YPos
 		STORE 	ATanY
 	 	CALL 	ATan2
-	 	ADDI	150
+	 	ADDI	155
 	 	CALL	mod360
 		STORE 	HomeAng
 		STORE 	DTheta

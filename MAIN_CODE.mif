@@ -65,7 +65,7 @@ CONTENT
            034 : 384C;  -- 		JPOS	TurnAroundGoHome
            035 : B800;  -- 		LOADI 	0
            036 : 1157;  -- 		STORE 	DTheta
-           037 : BA49;  -- 		LOADI 	FMid ;Sweeping speed
+           037 : 0A49;  -- 		LOAD 	FMid ;Sweeping speed
            038 : 1158;  -- 		STORE 	DVel
            039 : 8159;  -- 		CALL 	ControlMovement
            03A : 90AB;  -- 		IN 		DIST3
@@ -126,7 +126,7 @@ CONTENT
            071 : 90C1;  -- 	IN 		YPos
            072 : 8177;  -- 	CALL 	abs
            073 : 224E;  -- 	SUB 	MaxShort
-           074 : 388E;  -- 	JPOS 	MoveBack
+           074 : 3883;  -- 	JPOS 	TapTag ; if it reaches the end will go home
            075 : 8159;  -- 	CALL 	ControlMovement
            076 : 80AE;  -- 	CALL 	UpdateTag
            077 : 90AA;  -- 	IN 		DIST2
@@ -139,7 +139,7 @@ CONTENT
            07E : 80B0;  -- 	CALL	ObjectFoundBeep	
            07F : 90C1;  -- 	IN   	YPOS
            080 : 8177;  -- 	CALL 	Abs
-           081 : 68DC;  -- 	ADDI 	220 ; move forward this distance
+           081 : 68BE;  -- 	ADDI 	190 ; move forward this distance
            082 : 121D;  -- 	STORE 	EncoderY
            083 : 8159;  -- 	CALL 	ControlMovement
            084 : 90C1;  -- 	IN 		YPOS
@@ -176,7 +176,7 @@ CONTENT
            0A3 : 90C1;  -- 	 	IN 		YPos
            0A4 : 1152;  -- 		STORE 	ATanY
            0A5 : 80F2;  -- 	 	CALL 	ATan2
-           0A6 : 6896;  -- 	 	ADDI	150
+           0A6 : 689B;  -- 	 	ADDI	155
            0A7 : 80C7;  -- 	 	CALL	mod360
            0A8 : 1220;  -- 		STORE 	HomeAng
            0A9 : 1157;  -- 		STORE 	DTheta
