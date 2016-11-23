@@ -107,12 +107,8 @@ FindAndTagClosestObject:
 		STORE	TravelDist
 		OUT		SSEG1
 		SUB		MaxShort ;If less than max, then object found
-;		ADDI	300
-		;TODO case where object is within rotating distance 310 increments (1 foot)
 		
 		JNEG	NewFound
-;		ADDI	-300
-;		JNEG	RotateTag ;If the object is less than 1 foot to the right the bot, perform rotating tag
 		
 		IN		XPOS
 		SUB		MaxLong
@@ -186,19 +182,6 @@ FindAndTagClosestObject:
 
 		; Return to main
 		RETURN
-		
-; 	RotateTag:
-; 		;Rotate, tap, go home if object is really close to the right of the bot while sweeping
-; 		;and not captured by Teju's object in front of bot code
-; 		CALL	StopMovement
-; 		CALL	ObjectFoundBeep
-; 		LOADI	-15
-; 		STORE	Angle
-; 		Call 	Rotate
-; 		LOADI	15
-; 		STORE	Angle
-; 		Call	Rotate
-; 		Jump	GoingHome
 
 ; We are back at home now
 BackAtHome:
@@ -216,12 +199,6 @@ GoHome:
 	STORE 	DVel
 	LOAD 	HomeAng
 	STORE 	DTheta
-; GoHome:
-; 	; Go towards wall then when XPOS is close enough
-; 	LOADI 	FMid
-; 	STORE 	DVel
-; 	LOAD 	Angle
-; 	STORE 	DTheta
 Detect1:
 	CALL 	ControlMovement
 	IN 		XPos
@@ -408,61 +385,7 @@ Mod360:
 		JNEG 	M360N
 		RETURN
 
-; ; Rotate X degrees. Store X in the var Angle
-; Rotate:
-; 		STORE	Temp
-; 		; Calculate Threshold Values
-; 		; Calculate Lower Error Margin
-; 		IN 		THETA
-; 		ADD 	Angle
-; 		SUB 	ErrMargin
-; 		CALL 	Mod360
-; 		STORE 	LowErr
-; 		; Calculate High Error Margin
-; 		IN 		THETA
-; 		ADD 	Angle
-; 		ADD 	ErrMargin
-; 		CALL 	Mod360
-; 		STORE 	HighErr
-; 		; Check rotation direction
-; 		LOAD 	Angle
-; 		JNEG 	RotateCW ; else RotateCC
-; 
-; 	; Rotate CounterClock
-; 	RotateCC:
-; 		LOAD 	FSlow
-; 		OUT		RVELCMD
-; 		LOAD 	RSlow
-; 		OUT		LVELCMD
-; 	; Check if Theta is correct
-; 		IN 		THETA
-; 		ADD 	LowErr
-; 		CALL	mod360
-; 		SUB		HighErr
-; 		JNEG	RotateCC
-; 		IN 		THETA
-; 		SUB 	LowErr
-; 		JNEG	RotateCC
-; 		JUMP 	RotateEnd
-; 	; Rotate Clockwise
-; 	RotateCW:
-; 		LOAD 	RSlow
-; 		OUT		RVELCMD
-; 		LOAD 	FSlow
-; 		OUT		LVELCMD
-; 		; Check if Theta is correct
-; 
-; 		IN 		THETA
-; 		SUB		HighErr
-; 		JPOS	RotateCW
-; 		IN 		THETA
-; 		SUB 	LowErr
-; 		JNeg 	RotateCW
-; 	RotateEnd:
-; 	; Stop movement and return
-; 		CALL 	StopMovement
-; 		LOAD 	Temp
-; 		Return
+
 ;******************************************************************************;
 ; Atan2: 4-quadrant arctangent calculation                                     ;
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ;
