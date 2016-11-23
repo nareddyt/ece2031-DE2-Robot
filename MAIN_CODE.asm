@@ -55,6 +55,8 @@ WaitForUser:
 ; If necessary, put any initialization
 ; data for main here
 Main:
+
+		
 		; Reset odometer in case wheels move after programming
 		OUT 	RESETPOS
 	
@@ -104,7 +106,8 @@ FindAndTagClosestObject:
 		IN		DIST5
 		STORE	TravelDist
 		OUT		SSEG1
-		SUB		MaxShort
+		SUB		MaxShort ;If less than max, then object found
+		
 		JNEG	NewFound
 		
 		IN		XPOS
@@ -131,7 +134,7 @@ FindAndTagClosestObject:
 		; Move forward and tag
 		; Update EncoderX (initial value)
 		IN   	XPOS
-		ADDI 	310
+		ADDI 	180  ;Forward tagging distance
 		STORE 	EncoderX
 		
 	HitDetectedAlongPath:
@@ -161,8 +164,11 @@ FindAndTagClosestObject:
 		STORE 	DTheta
 		LOAD 	RFast
 		STORE 	DVel
-		; Move robot
+		; Move robot back indefinitely
 		CALL 	ControlMovement
+		IN		XPOS
+		ADDI	-100
+		JNEG	BackAtHome
 		JUMP	GoingHome
 			
 	NewFound:
@@ -193,16 +199,10 @@ GoHome:
 	STORE 	DVel
 	LOAD 	HomeAng
 	STORE 	DTheta
-; GoHome:
-; 	; Go towards wall then when XPOS is close enough
-; 	LOADI 	FMid
-; 	STORE 	DVel
-; 	LOAD 	Angle
-; 	STORE 	DTheta
 Detect1:
 	CALL 	ControlMovement
 	IN 		XPos
-	ADDI 	-300 ; distance away from x origin
+	ADDI 	-350 ; distance away from x origin
 	JPOS 	Detect1
 	LOADI	60
 	STORE 	DTheta
@@ -254,7 +254,7 @@ TagIt2:
 	; Update EncoderY (initial value)
 	IN   	YPOS
 	CALL 	Abs
-	ADDI 	190 ; move forward this distance
+	ADDI 	160 ; move forward this distance
 	STORE 	EncoderY
 TapTag:
 	; Travel a bit more
@@ -269,14 +269,14 @@ TapTag:
 	; Update EncoderY and Control Movement
 	IN 		YPOS
 	CALL 	Abs
-	ADDI 	-100  ;move back this distance
+	ADDI 	-80  ;move back this distance
 	STORE 	EncoderY
 	LOAD 	RFast
 	STORE 	DVel
 	
 MoveBack:
 	IN		XPOS
-	SUB     TwoFeet	
+	ADDI    -610 ; About 1 feet	
 	JNEG	GottaGoBack
 	JUMP	ConwithBack
 	; if object is an edge case, just go straight backwards
@@ -284,15 +284,25 @@ MoveBack:
 		; travel backwards and check YPos to see if you're home
 		IN 		YPOS
 		CALL    ABS
-		ADDI	-100
-		JNEG	BackAtHome
+		ADDI	-110
+		JNEG	GottaGoBack2
 		LOAD 	RMid
 		STORE 	DVel
 		LOADI	-90
 		STORE	DTheta
 		CALL	ControlMovement
 		JUMP	GottaGoBack	
-	
+	GottaGoBack2:
+		LOAD 	RSlow
+		STORE 	DVel
+		LOADI 	0
+		STORE 	DTheta
+		CALL 	ControlMovement
+		; Check condition
+		IN 		XPOS
+		ADDI 	-100
+		JNEG 	BackAtHome
+		JUMP 	GottaGoBack2
 	ConWithBack:
 		; Move backwards a little
 		CALL 	ControlMovement
@@ -308,7 +318,7 @@ MoveBack:
 	 	IN 		YPos
 		STORE 	ATanY
 	 	CALL 	ATan2
-	 	ADDI	155
+	 	ADDI	165; was 157
 	 	CALL	mod360
 		STORE 	HomeAng
 		STORE 	DTheta
@@ -375,58 +385,7 @@ Mod360:
 		JNEG 	M360N
 		RETURN
 
-; Rotate X degrees. Store X in the var Angle
-Rotate:
-		STORE	Temp
-		; Calculate Threshold Values
-		; Calculate Lower Error Margin
-		IN 		THETA
-		ADD 	Angle
-		SUB 	ErrMargin
-		CALL 	Mod360
-		STORE 	LowErr
-		; Calculate High Error Margin
-		IN 		THETA
-		ADD 	Angle
-		ADD 	ErrMargin
-		CALL 	Mod360
-		STORE 	HighErr
-		; Check rotation direction
-		LOAD 	Angle
-		JNEG 	RotateCW ; else RotateCC
 
-	; Rotate CounterClock
-	RotateCC:
-		LOAD 	FSlow
-		OUT		RVELCMD
-		LOAD 	RSlow
-		OUT		LVELCMD
-	; Check if Theta is correct
-		IN 		THETA
-		SUB 	HighErr
-		JPOS	RotateCC
-		IN 		THETA
-		SUB  	LowErr
-		JNEG	RotateCC
-		JUMP 	RotateEnd
-	; Rotate Clockwise
-	RotateCW:
-		LOAD 	RSlow
-		OUT		RVELCMD
-		LOAD 	FSlow
-		OUT		LVELCMD
-		; Check if Theta is correct
-		IN 		THETA
-		SUB 	HighErr
-		JPOS	RotateCW
-		IN 		THETA
-		SUB  	LowErr
-		JNEG	RotateCW
-	RotateEnd:
-	; Stop movement and return
-		CALL 	StopMovement
-		LOAD 	Temp
-		RETURN
 ;******************************************************************************;
 ; Atan2: 4-quadrant arctangent calculation                                     ;
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ;
@@ -849,7 +808,7 @@ WaitTime:			DW 0
 Angle: 				DW 0 ; Used in Rotate function
 LowErr: 			DW 0 ; Error margin variables
 HighErr: 			DW 0 ; Used in Rotate function
-ErrMargin: 			DW 4
+ErrMargin: 			DW 8 ;Margin of error for rotate routine
 EncoderY: 			DW 0		; Stores current value of encoder in Y direction
 EncoderX:			DW 0		; Stores current value of encoder in X direction
 TagAng: 			DW -90		; Tells robot travel ang when tagging
@@ -905,8 +864,8 @@ Deg90:    DW 90        ; 90 degrees in odometer units
 Deg180:   DW 180       ; 180
 Deg270:   DW 270       ; 270
 Deg360:   DW 360       ; can never actually happen; for math only
-FSlow:    DW 140       ; 100 is about the lowest velocity value that will move
-RSlow:    DW -140
+FSlow:    DW 150       ; 100 is about the lowest velocity value that will move
+RSlow:    DW -150
 FMid:     DW 350       ; 350 is a medium speed
 RMid:     DW -350
 FFast:    DW 500       ; 500 is almost max speed (511 is max)
